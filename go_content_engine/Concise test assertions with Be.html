@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<!-- saved from url=(0022)https://antonz.org/be/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Concise test assertions with Be</title>
+<meta name="description" content="Go package with a minimal API and flexible error checking."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898072323&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fbe%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898072323&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Concise test assertions with Be_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/be/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Concise test assertions with Be"><meta property="og:description" content="Go package with a minimal API and flexible error checking."><meta property="og:url" content="https://antonz.org/be/"><meta property="og:image" content="https://antonz.org/be/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Concise test assertions with Be"><meta name="twitter:description" content="Go package with a minimal API and flexible error checking."><meta name="twitter:url" content="https://antonz.org/be/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/be/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Concise test assertions with Be_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/be/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Concise test assertions with Be</h1></header><p>I appreciate Go's verbosity, but not when it comes to writing tests. Endless if statements with <code>t.Errorf</code> not only make tests long, but also obscure their purpose and make them harder to read. For test assertions, I'd prefer something more concise than what the standard library offers.</p><p>There's <a href="https://pkg.go.dev/github.com/attic-labs/testify/assert">testify/assert</a>, of course. It's a decent package, but it's quite big. There are about 40 assertion functions, and that's just the tip of the iceberg. Definitely not my thing.</p><p>There's also Mat Ryer's <a href="https://pkg.go.dev/github.com/matryer/is">is</a>. It's about as minimal as a package can get, but its focus is a bit puzzling to me. Instead of mainly helping with assertions, it seems to concentrate more on parsing comments and formatting the output.</p><p>I wanted a small package, about the size of <code>is</code>, with decent assertion features for testing equality and errors. So I made one.</p><h2 id="be--a-minimal-test-assertions-package">Be — a minimal test assertions package</h2><p><a href="https://github.com/nalgeon/be">Be</a> is a simple test assertions package that focuses on equality checks and flexible error checking. Here are a few highlights:</p><ul><li>Minimal API: <code>Equal</code>, <code>Err</code>, and <code>True</code> assertions.</li><li>Correctly compares <code>time.Time</code> values and other types with an <code>Equal</code> method.</li><li>Flexible error assertions: check if an error exists, check its value, type, or any combination of these.</li></ul><p><code>Equal</code> asserts that two values are equal:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="s">"pass"</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span> <span class="o">:=</span> <span class="s">"hello"</span><span class="p">,</span> <span class="s">"hello"</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">be</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="s">"fail"</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span> <span class="o">:=</span> <span class="s">"olleh"</span><span class="p">,</span> <span class="s">"hello"</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">be</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// got: "olleh"; want: "hello"
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>Err</code> asserts that there is an error:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">regexp</span><span class="p">.</span><span class="nf">Compile</span><span class="p">(</span><span class="s">"he(?o"</span><span class="p">)</span> <span class="c1">// invalid
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">be</span><span class="p">.</span><span class="nf">Err</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Or that there are no errors:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">regexp</span><span class="p">.</span><span class="nf">Compile</span><span class="p">(</span><span class="s">"he??o"</span><span class="p">)</span> <span class="c1">// valid
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">be</span><span class="p">.</span><span class="nf">Err</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Or that an error message contains a substring:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">regexp</span><span class="p">.</span><span class="nf">Compile</span><span class="p">(</span><span class="s">"he(?o"</span><span class="p">)</span> <span class="c1">// invalid
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">be</span><span class="p">.</span><span class="nf">Err</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="s">"invalid or unsupported"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Or that an error matches the expected error according to <code>errors.Is</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Op</span><span class="p">:</span> <span class="s">"open"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Path</span><span class="p">:</span> <span class="s">"file.txt"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Err</span><span class="p">:</span> <span class="nx">fs</span><span class="p">.</span><span class="nx">ErrNotExist</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">be</span><span class="p">.</span><span class="nf">Err</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="nx">fs</span><span class="p">.</span><span class="nx">ErrNotExist</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Or that the error type matches the expected type according to <code>errors.As</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">got</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Op</span><span class="p">:</span> <span class="s">"open"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Path</span><span class="p">:</span> <span class="s">"file.txt"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Err</span><span class="p">:</span> <span class="nx">fs</span><span class="p">.</span><span class="nx">ErrNotExist</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">be</span><span class="p">.</span><span class="nf">Err</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">TypeFor</span><span class="p">[</span><span class="o">*</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span><span class="p">]())</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Or a mix of the above:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="o">:=</span> <span class="nf">AppError</span><span class="p">(</span><span class="s">"oops"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">be</span><span class="p">.</span><span class="nf">Err</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"failed"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">AppError</span><span class="p">(</span><span class="s">"oops"</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">reflect</span><span class="p">.</span><span class="nx">TypeFor</span><span class="p">[</span><span class="nx">AppError</span><span class="p">](),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>True</code> asserts that an expression is true:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">s</span> <span class="o">:=</span> <span class="s">"go is awesome"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">be</span><span class="p">.</span><span class="nf">True</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Contains</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">"go"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/be/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/be/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>That's it!</p><h2 id="design-decisions">Design decisions</h2><p>Be is opinionated. It only has three assert functions, which are perfectly enough to write good tests.</p><p>Unlike other testing packages, <code>be</code> doesn't support custom error messages. When a test fails, you'll end up checking the code anyway, so why bother? The line number shows the way.</p><p>Be has flexible error assertions. You don't need to choose between <code>Error</code>, <code>ErrorIs</code>, <code>ErrorAs</code>, <code>ErrorContains</code>, <code>NoError</code>, or anything like that — just use <code>be.Err</code>. It covers everything.</p><p>Be doesn't fail the test when an assertion fails, so you can see all the errors at once instead of hunting them one by one. The only exception is when the <code>be.Err(err, nil)</code> assertion fails — this means there was an unexpected error. In this case, the test terminates immediately because any following assertions probably won't make sense and could cause panics.</p><p>The parameter order is (got, want), not (want, got). It just feels more natural — like saying "account balance is 100 coins" instead of "100 coins is the account balance".</p><p>Be currently has ≈100 lines of code (+450 lines for tests). For comparison, <code>is</code> has ≈250 loc (+250 lines for tests).</p><h2 id="final-thoughts">Final thoughts</h2><p>If you think the standard library's approach is too wordy, but still want to keep things simple, try using <code>be</code>! You can install it with <code>go get github.com/nalgeon/be</code> and get started right away.</p><p>I hope it serves you well.</p><p>See the <i class="fab fa-github"></i> <a href="https://github.com/nalgeon/be">nalgeon/be</a>
+repo if you are interested.</p><script defer="" src="./Concise test assertions with Be_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-07-08 08:00:00 +0000 UTC">08 Jul, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/projects/">projects</a>&nbsp;
+<a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-concurrency/semaphores/">Gist of Go: Semaphores</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/redka/">Redka: Redis re-implemented with SQL</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/">Gist of Go: Concurrency</a></p><p><a href="https://antonz.org/writing-package-manager/">Writing a package manager</a></p><p><a href="https://antonz.org/go-concurrency/semaphores/">Gist of Go: Semaphores</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

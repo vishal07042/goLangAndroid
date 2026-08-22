@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<!-- saved from url=(0043)https://antonz.org/go-concurrency/channels/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Gist of Go: Channels</title>
+<meta name="description" content="A multi-purpose concurrency tool."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897867941&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-concurrency%2Fchannels%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897867941&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Gist of Go_ Channels_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-concurrency/channels/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Gist of Go: Channels"><meta property="og:description" content="A multi-purpose concurrency tool."><meta property="og:url" content="https://antonz.org/go-concurrency/channels/"><meta property="og:image" content="https://antonz.org/go-concurrency/channels/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Gist of Go: Channels"><meta name="twitter:description" content="A multi-purpose concurrency tool."><meta name="twitter:url" content="https://antonz.org/go-concurrency/channels/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-concurrency/channels/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Gist of Go_ Channels_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-concurrency/channels/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Gist of Go: Channels</h1></header><p><em>This is a chapter from my book on <a href="https://antonz.org/go-concurrency">Go concurrency</a>, which teaches the topic from the ground up through interactive examples.</em></p><p>We've learned how to launch <a href="https://antonz.org/go-concurrency/goroutines/">goroutines</a> and pass data through channels. But channels have many more interesting features. Let's dive in!</p><div class="row"><div class="col-xs-12 col-sm-6 col-md-"><ul><li><a href="https://antonz.org/go-concurrency/channels/#end-of-data-signaling">End-of-data signaling</a></li><li><a href="https://antonz.org/go-concurrency/channels/#closing-a-channel">Closing a channel</a></li><li><a href="https://antonz.org/go-concurrency/channels/#channel-iteration">Channel iteration</a></li><li><a href="https://antonz.org/go-concurrency/channels/#directional-channels">Directional channels</a></li><li><a href="https://antonz.org/go-concurrency/channels/#done-channel">Done channel</a></li><li><a href="https://antonz.org/go-concurrency/channels/#preventing-deadlocks">Preventing deadlocks</a></li></ul></div><div class="col-xs-12 col-sm-6 col-md-"><ul><li><a href="https://antonz.org/go-concurrency/channels/#buffered-channels">Buffered channels</a></li><li><a href="https://antonz.org/go-concurrency/channels/#asyncawait">async/await</a></li><li><a href="https://antonz.org/go-concurrency/channels/#semaphore">Semaphore</a></li><li><a href="https://antonz.org/go-concurrency/channels/#closing-a-buffered-channel">Closing a buffered channel</a></li><li><a href="https://antonz.org/go-concurrency/channels/#nil-channel">nil channel</a></li><li><a href="https://antonz.org/go-concurrency/channels/#keep-it-up">Keep it up</a></li></ul></div></div><h2 id="end-of-data-signaling">End-of-data signaling</h2><p>Here's a program that splits a string by commas and filters out empty parts:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">str</span> <span class="o">:=</span> <span class="s">"one,two,,four"</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>                           <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="s">","</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">in</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>                                 <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// one two four
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Goroutine ➊ splits the string into words and sends them to the <code>in</code> channel. Loop ➋ reads words from the channel and prints non-empty ones.</p><p>Unfortunately, the program doesn't work:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fatal error: all goroutines are asleep - deadlock!
+</span></span></code></pre></div><p>The problem is with the infinite loop ➋:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>How do you know when there are no more words in <code>in</code>, and it's time to exit the loop? We used to solve this by checking for an empty string:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>But now an empty string is a valid value. It should be skipped, not used as a signal to exit the loop.</p><p>One way to handle this is:</p><ul><li>The goroutine sends a special value to <code>in</code> after it finishes with the words&nbsp;➊</li><li>The loop watches for this special value and stops working&nbsp;➋</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">const</span> <span class="nx">eof</span> <span class="p">=</span> <span class="s">"__EOF__"</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">str</span> <span class="o">:=</span> <span class="s">"one,two,,four"</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="s">","</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">in</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">&lt;-</span> <span class="nx">eof</span>         <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="nx">eof</span> <span class="p">{</span>  <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>But, as you can imagine, this is a weak solution. Fortunately, Go provides a proper way.</p><h2 id="closing-a-channel">Closing a channel</h2><p>We have encountered a common problem with interaction between two actors in a concurrent environment:</p><ul><li>The writer <em>sends</em> values to the channel.</li><li>The reader <em>receives</em> values from the channel.</li><li>How does the writer tell the reader that there are no more values?</li></ul><p>Go has a mechanism that solves this problem:</p><ul><li>The writer can <em>close</em> the channel.</li><li>The reader can detect that the channel is closed.</li></ul><p>The writer closes the channel using the <code>close()</code> function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">str</span> <span class="o">:=</span> <span class="s">"one,two,,four"</span>
+</span></span><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="s">","</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">in</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span></code></pre></div><codapi-snippet id="s-close-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The reader checks the channel's status with a second value ("comma OK") when reading:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-close-1" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Suppose the writer sends the strings "one" and "two" and then closes the channel. Here's what the reader gets:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// in &lt;- "one"
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// word = "one", ok = true
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// in &lt;- "two"
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// word = "two", ok = true
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// close(in)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// word = "", ok = false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// word = "", ok = false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// word = "", ok = false
+</span></span></span></code></pre></div><p>While the channel is open, the reader receives the next value and a <code>true</code> status. If the channel is closed, the reader gets a zero value ("" for strings) and a <code>false</code> status.</p><p>As shown, you can read from a closed channel as much as you want — it always returns a zero value and a <code>false</code> status. This is intentional, and we'll explore why in a few steps.</p><p>A channel can only be closed once. Closing it again will cause a panic:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nb">close</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nb">close</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>You also can't write to a closed channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">&lt;-</span> <span class="s">"hi"</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="o">&lt;-</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// hi
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">&lt;-</span> <span class="s">"bye"</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// panic: send on closed channel
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Here are two important rules:</p><ol><li><em>Only the writer can close the channel, not the reader</em>. If the reader closes it, the writer will encounter a panic on the next write.</li><li><em>A writer can only close the channel if they are the sole owner</em>. If there are multiple writers and one closes the channel, the others will face a panic on their next write or attempt to close the channel.</li></ol><div class="boxed"><p><strong>Should I always close a channel?</strong></p><p>If you've ever worked with external resources (such as files or database connections), you know they should always be closed to prevent leaks. But a channel isn't an external resource. When a channel is no longer used, Go's garbage collector will free its resources, whether it's closed or not.</p><p>The only reason to close a channel is to signal to its readers that all data has been sent. If this isn't important to the readers, then you don't need to close it.</p></div><h2 id="channel-iteration">Channel iteration</h2><p>In the previous step, we made the reader constantly check if the channel was open:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">word</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-close-1" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>That's pretty tedious. To avoid doing this manually, Go supports the <code>for-range</code> statement for reading from a channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-close-1" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>range</code> automatically reads the next value from the channel and checks if it's closed. If the channel is closed, it exits the loop. Convenient, right?</p><p>Note that range over a channel returns a single value, not a pair, unlike range over a slice. Compare these cases:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// slice
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">words</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"uno"</span><span class="p">,</span> <span class="s">"dos"</span><span class="p">,</span> <span class="s">"tres"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">idx</span><span class="p">,</span> <span class="nx">val</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">idx</span><span class="p">,</span> <span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">&lt;-</span> <span class="s">"uno"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">&lt;-</span> <span class="s">"dos"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">&lt;-</span> <span class="s">"tres"</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">val</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="boxed"><p><strong>✎ Exercise: Iterate &amp; close</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="directional-channels">Directional channels</h2><p>Here's a program that filters out empty strings:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">str</span> <span class="o">:=</span> <span class="s">"one,two,,four"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">submit</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">receive</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">submit</span><span class="p">(</span><span class="nx">str</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="s">","</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">receive</span><span class="p">(</span><span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">stream</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Everything works fine now, but if I come back to the code in a month and I'm not too careful, I could easily break it.</p><p>For example, if I close the channel from the reader function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">receive</span><span class="p">(</span><span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">stream</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>    <span class="c1">// (!)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="directional-1.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Or accidentally read from the channel in the writer function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">submit</span><span class="p">(</span><span class="nx">str</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="s">","</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">stream</span>         <span class="c1">// (!)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="directional-2.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>These errors occur at runtime, so I won't notice them until I run the program. It would be better to catch them at compile time.</p><p>You can protect yourself from this kind of errors by setting the channel direction. Channels can be:</p><ul><li><code>chan</code> (bidirectional): for reading and writing (default);</li><li><code>chan&lt;-</code> (send-only): for writing only;</li><li><code>&lt;-chan</code> (receive-only): for reading only.</li></ul><p>The <code>submit()</code> function needs a send-only channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">submit</span><span class="p">(</span><span class="nx">str</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">stream</span> <span class="kd">chan</span><span class="o">&lt;-</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>  <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="s">","</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// &lt;-stream                                  // (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="directional-2.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>In the function signature ➊, we've specified that it's send-only, so you can't read from it. Uncomment line ➋, and you'll get a compile error:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">invalid operation: cannot receive from send-only channel stream
+</span></span></code></pre></div><p>The <code>receive()</code> function needs a receive-only channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">receive</span><span class="p">(</span><span class="nx">stream</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>  <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">stream</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">!=</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s "</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// stream &lt;- "oops"             // (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// close(stream)                // (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="directional-1.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>In the function signature ➊, we've specified that it's receive-only. You can't write to it. Uncomment line ➋, and you'll get a compile error:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">invalid operation: cannot send to receive-only channel stream
+</span></span></code></pre></div><p>You also can't close a receive-only channel. Uncomment line ➌, and you'll get a compile error:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">invalid operation: cannot close receive-only channel stream
+</span></span></code></pre></div><p>You can set the channel direction during initialization, but it's not very helpful:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">str</span> <span class="o">:=</span> <span class="s">"one,two,,four"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span><span class="o">&lt;-</span> <span class="kt">string</span><span class="p">)</span>  <span class="c1">// (!)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="nf">submit</span><span class="p">(</span><span class="nx">str</span><span class="p">,</span> <span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">receive</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Here, stream is declared as send-only, so it doesn't fit the <code>receive()</code> function anymore. If declared as receive-only, it won't fit <code>submit()</code>. So, channels are usually initialized for both reading and writing, and specified as directional in function parameters. Go automatically converts a regular channel to a directional one:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">in</span> <span class="kd">chan</span><span class="o">&lt;-</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">&lt;-</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl"><span class="p">}(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span><span class="p">(</span><span class="nx">out</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="o">&lt;-</span><span class="nx">out</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 42
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Always specify the channel direction in function parameters to avoid runtime errors.</p><div class="boxed"><p><strong>✎ Exercise: Fixing directions</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="done-channel">Done channel</h2><p>Suppose we have a function that speaks a phrase word by word with some pauses:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">id</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker #%d says: %s...\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-done-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Let's create several concurrent talkers, one for each phrase:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"go is awesome"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"cats are cute"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"rain is wet"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"channels are hard"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"floor is lava"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">idx</span><span class="p">,</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">phrases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-done-1" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The program doesn't print anything because the <code>main()</code> function finishes before any of the talkers completes.</p><p>Previously, we used <code>sync.WaitGroup</code> to wait for goroutines to finish. Alternatively, you can use a "done channel" approach:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">done</span> <span class="kd">chan</span><span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{},</span> <span class="nx">id</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker #%d says: %s...\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>                     <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-done-2" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"go is awesome"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"cats are cute"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"rain is wet"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"channels are hard"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"floor is lava"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>            <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">idx</span><span class="p">,</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">phrases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">done</span><span class="p">,</span> <span class="nx">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nx">phrase</span><span class="p">)</span>        <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// wait for goroutines to finish
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">for</span> <span class="k">range</span> <span class="nb">len</span><span class="p">(</span><span class="nx">phrases</span><span class="p">)</span> <span class="p">{</span>               <span class="c1">// (4)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="o">&lt;-</span><span class="nx">done</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-done-2" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Here's how it works:</p><ul><li>We create a separate channel ➋ and pass it to each goroutine ➌.</li><li>Inside the goroutine, we write a value to the channel once it completes ➊.</li><li>In the main function, we wait for each goroutine to write to the channel ➍.</li></ul><p>For this to work, the main function must know exactly how many goroutines are running (in our case, one for each original string). Otherwise, it won't know how many values to read from <code>done</code>.</p><p>Now everything works fine!</p><p>If you don't like the done channel approach, you can always use <code>sync.WaitGroup</code> instead.</p><h2 id="preventing-deadlocks">Preventing deadlocks</h2><p>The most common problem in concurrent programs is a deadlock. A deadlock occurs when one goroutine waits for another, and vice versa. Go detects such situations and terminates the program with an error.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fatal error: all goroutines are asleep - deadlock!
+</span></span></code></pre></div><p>To fight a deadlock, you should <del>become a deadlock</del> understand its cause. Let's look at an example:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">work</span><span class="p">(</span><span class="nx">done</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{},</span> <span class="nx">out</span> <span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;=</span> <span class="mi">5</span><span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nx">i</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">work</span><span class="p">(</span><span class="nx">done</span><span class="p">,</span> <span class="nx">out</span><span class="p">)</span>    <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">done</span>                <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">n</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">out</span> <span class="p">{</span>  <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>In the main function, we start a goroutine called <code>work</code> ➊. It writes a result to the <code>out</code> channel and signals completion via the <code>done</code> channel. Meanwhile, the main function waits on the done channel ➋, then reads from the result channel ➌.</p><p>See the problem? <code>work()</code> ➊ wants to write to <code>out</code>, so it waits for a reader ➌. But ➋ wants to read from <code>done</code>, so it waits for ➊. So, <code>work()</code> waits for <code>main()</code>, and <code>main()</code> waits for <code>work()</code>. Deadlock.</p><p>The solution is to do ➋ and ➌ independently:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">work</span><span class="p">(</span><span class="nx">done</span><span class="p">,</span> <span class="nx">out</span><span class="p">)</span>        <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>               <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="o">&lt;-</span><span class="nx">done</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"work done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">close</span><span class="p">(</span><span class="nx">out</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">n</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">out</span> <span class="p">{</span>      <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"all goroutines done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="deadlock.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>When you encounter a deadlock, identify its cause. Then a solution will present itself.</p><div class="boxed"><p><strong>✎ Exercise: Four counters</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="buffered-channels">Buffered channels</h2><p>There is a <code>send()</code> goroutine that sends a value through the <code>stream</code> channel to the <code>receive()</code> goroutine:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">bool</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">send</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"sender: ready to send..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="kc">true</span>                                <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"sender: sent!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">receive</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"receiver: not ready yet..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"receiver: ready to receive..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">stream</span>                                      <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"receiver: received!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="nx">send</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="nx">receive</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>send()</code> wants to send a value to the channel right after it starts, but <code>receive()</code> isn't ready yet. So, <code>send()</code> has to block at point ➊ and wait 100 milliseconds until <code>receive()</code> reaches point ➋ and agrees to take the value from the channel. This is how goroutines synchronize at the send/receive point.</p><p>Most of the time, this behavior is fine. But what if we want the sender not to wait for the receiver? Suppose we want it to send a value to the channel and move on. The receiver can pick it up when it is ready. If only we could put a value into a channel like into a queue!</p><p>Fortunately, Go provides such a feature:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// The second argument is the channel buffer size
+</span></span></span><span class="line"><span class="cl"><span class="c1">// i.e. the number of values it can hold.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// ⬜ ⬜ ⬜
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 1️⃣ ⬜ ⬜
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 1️⃣ 2️⃣ ⬜
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 1️⃣ 2️⃣ 3️⃣
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="o">&lt;-</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 1
+</span></span></span><span class="line"><span class="cl"><span class="c1">// 2️⃣ 3️⃣ ⬜
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="o">&lt;-</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 2
+</span></span></span><span class="line"><span class="cl"><span class="c1">// 3️⃣ ⬜ ⬜
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">5</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 3️⃣ 4️⃣ 5️⃣
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">6</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// There is no more room in the channel,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// so the goroutine blocks.
+</span></span></span></code></pre></div><p>These channels are called <em>buffered</em> because they have a fixed-size buffer for storing values. By default, if you don't specify a buffer size, a channel is <em>unbuffered</em> (buffer size equals zero) — these are the channels we've been using so far:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// unbuffered channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">unbuffered</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// buffered channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">buffered</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span></code></pre></div><p>Buffered channels work with the built-in <code>len()</code> and <code>cap()</code> functions:</p><ul><li><code>cap()</code> returns the capacity of the buffer;</li><li><code>len()</code> returns the number of values in the buffer.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">cap</span><span class="p">(</span><span class="nx">stream</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="nx">stream</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 2 0
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">cap</span><span class="p">(</span><span class="nx">stream</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="nx">stream</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 2 1
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">7</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">cap</span><span class="p">(</span><span class="nx">stream</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="nx">stream</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 2 2
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">cap</span><span class="p">(</span><span class="nx">stream</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="nx">stream</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 2 1
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>To decouple <code>send()</code> from <code>receive()</code> using a buffered channel, just change the <code>stream</code> definition and leave the rest unchanged:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Create a channel with a buffer of 1
+</span></span></span><span class="line"><span class="cl"><span class="c1">// instead of unbuffered.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">bool</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// unchanged
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">send</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"sender: ready to send..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"sender: sent!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// unchanged
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">receive</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"receiver: not ready yet..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"receiver: ready to receive..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"receiver: received!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// unchanged
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="nx">send</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="nx">receive</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now the sender doesn't wait for the receiver.</p><p>Buffered channels aren't always necessary. Don't overuse them, and only apply when regular channels don't fit for some reason. We'll look at some examples in the next steps.</p><h2 id="asyncawait">async/await</h2><p>async/await is a common concept in many programming languages, where functions are either <em>synchronous</em> (run sequentially) or <em>asynchronous</em> (can run concurrently). Asynchronous functions are marked with the keyword <code>async</code>, and the keyword <code>await</code> is used to wait for their results.</p><p>If Go supported this concept, it might look like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">async</span> <span class="kd">func</span> <span class="nf">answer</span><span class="p">()</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">n</span> <span class="o">:=</span> <span class="nx">await</span> <span class="nf">answer</span><span class="p">()</span>
+</span></span></code></pre></div><p>Fortunately, Go doesn't have async/await. Hopefully, you won't miss it. But you can implement it in just five lines of code:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// await runs fn in a separate goroutine
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and waits for the result.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">await</span><span class="p">(</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">()</span> <span class="nx">any</span><span class="p">)</span> <span class="nx">any</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">any</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>    <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nf">fn</span><span class="p">()</span>             <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&lt;-</span><span class="nx">out</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">slowpoke</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="nx">any</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Print</span><span class="p">(</span><span class="s">"I'm so... "</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"slow"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="s">"okay"</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">result</span> <span class="o">:=</span> <span class="nf">await</span><span class="p">(</span><span class="nx">slowpoke</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">result</span><span class="p">.(</span><span class="kt">string</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><blockquote><p>I don't use generics in this book to keep the code simple. You can easily convert any non-generic function or type in the examples to a generic one by adding appropriate type parameters.</p></blockquote><p>As you can see, <code>await()</code> doesn't do anything special:</p><ul><li>Creates a result channel.</li><li>Starts a goroutine to execute the passed function.</li><li>Waits for completion.</li><li>Returns the result to the client.</li></ul><p>Thanks to the buffered channel ➊, the goroutine isn't blocked at point ➋ and can exit immediately, making it independent of the caller. In this particular task, a regular channel would suffice, since <code>await()</code> reads the result immediately. But when there's no such guarantee, a buffered channel can be useful.</p><div class="boxed"><p><strong>About asynchronicity</strong></p><p>You might say that this is a "cheat" version of async/await: there's no separate asynchronous function entity, just waiting for a response with <code>await</code>. That's true. I didn't want to complicate things. The goal here is to demonstrate the technique of running a function in an internal goroutine and waiting for the result on a channel.</p><p>If you're curious about a more realistic asynchronous approach with goroutines, here's what it might look like:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// async converts a regular function to an asynchronous one.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// An asynchronous function returns a result channel when called.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">async</span><span class="p">(</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">()</span> <span class="nx">any</span><span class="p">)</span> <span class="kd">func</span><span class="p">()</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">any</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kd">func</span><span class="p">()</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">any</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">any</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nf">fn</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">out</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// await waits for the result of an asynchronous function
+</span></span></span><span class="line"><span class="cl"><span class="c1">// on the given channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">await</span><span class="p">(</span><span class="nx">in</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">any</span><span class="p">)</span> <span class="nx">any</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-async-await" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fn</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="nx">any</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="s">"okay"</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">slowpoke</span> <span class="o">:=</span> <span class="nf">async</span><span class="p">(</span><span class="nx">fn</span><span class="p">)</span> <span class="c1">// create an asynchronous function
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">slowpoke</span><span class="p">()</span>                  <span class="c1">// does not block
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">slowpoke</span><span class="p">()</span>                  <span class="c1">// does not block
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">slowpoke</span><span class="p">()</span>                  <span class="c1">// does not block
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">result</span> <span class="o">:=</span> <span class="nf">await</span><span class="p">(</span><span class="nf">slowpoke</span><span class="p">())</span> <span class="c1">// blocks until the result is ready
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">elapsed</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">result</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"took"</span><span class="p">,</span> <span class="nx">elapsed</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// okay
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// took 100ms
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// total execution time is 100ms, not 400ms
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-async-await" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet></div><div class="boxed"><p><strong>✎ Exercise: Promise.all()</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="semaphore">Semaphore</h2><p>Remember how we launched "talker" goroutines — one for each phrase?</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">idx</span><span class="p">,</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">phrases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Goroutines are lightweight. You can easily start 10, 100, or even 1,000 at once. But what if you have a million phrases? Real concurrency is still limited by the number of CPU cores. So, it's pointless to waste memory on hundreds of thousands of goroutines when only eight (or however many CPUs you have) can run concurrently.</p><p>Let's say we want only N <code>say</code> goroutines to exist at the same time. A buffered channel can help achieve this. Here's the idea:</p><ul><li>Create a channel with a buffer size of N and fill it with "tokens" (arbitrary values).</li><li>Before starting, a goroutine takes a token from the channel.</li><li>Once finished, the goroutine returns the token to the channel.</li></ul><p>If there are no tokens left in the channel, the next goroutine will not start and will wait until someone returns a token to the channel. In this way, no more than N goroutines will run simultaneously. This setup is called a <em>semaphore</em>.</p><p>Here's how it might look with N = 2:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"a b c"</span><span class="p">,</span> <span class="s">"d e"</span><span class="p">,</span> <span class="s">"f"</span><span class="p">,</span> <span class="s">"g h"</span><span class="p">,</span> <span class="s">"i j k"</span><span class="p">,</span> <span class="s">"l m"</span><span class="p">,</span> <span class="s">"n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Semaphore for 2 goroutines.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">sema</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">phrases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Get a token from the channel (if there are any).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">tok</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">sema</span><span class="p">,</span> <span class="nx">tok</span><span class="p">,</span> <span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Wait for all goroutines to finish their work
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// (all tokens are returned to the channel).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// say prints each word of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">sema</span> <span class="kd">chan</span><span class="o">&lt;-</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">tok</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker #%d says: %s...\n"</span><span class="p">,</span> <span class="nx">tok</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Return the token to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="nx">tok</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The <code>main</code> function goes through the phrases, takes a token from the channel for each phrase, and starts a <code>say</code> goroutine. The <code>say</code> goroutine prints the phrase and returns the token to the channel. This way, phrases are processed at the same time, and each is printed only once.</p><p><strong>Inverse semaphore</strong></p><p>In practice, you'll often find an "inverse" approach to implementing semaphores:</p><ul><li>Create an empty channel with a buffer size of N.</li><li>Before starting, a goroutine puts a token into the channel.</li><li>Once finished, the goroutine takes a token from the channel.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">phrases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="s">"a b c"</span><span class="p">,</span> <span class="s">"d e"</span><span class="p">,</span> <span class="s">"f"</span><span class="p">,</span> <span class="s">"g h"</span><span class="p">,</span> <span class="s">"i j k"</span><span class="p">,</span> <span class="s">"l m"</span><span class="p">,</span> <span class="s">"n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// Semaphore for 2 goroutines.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">sema</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{},</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">phrases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="c1">// Put a token into the channel (if there is space).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">		<span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">sema</span><span class="p">,</span> <span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// Wait for all goroutines to finish their work
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// (all tokens taken from the channel).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// say prints each word of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">sema</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{},</span> <span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker says: %s...\n"</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Take the token from the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>If the channel is full of tokens, the next goroutine will not start and will wait until someone takes a token from the channel. In this way, no more than N goroutines will run simultaneously.</p><p>Also, the tokens do not have to be numbers (as in the original example — for demonstration purposes). More often they are just empty structs.</p><div class="boxed"><p><strong>Alternative approach</strong></p><p>You could solve the problem without a semaphore, as we did in the "Four counters" section earlier. Just throw the data into an input channel and start N goroutines to process it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrases</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"a b c"</span><span class="p">,</span> <span class="s">"d e"</span><span class="p">,</span> <span class="s">"f"</span><span class="p">,</span> <span class="s">"g h"</span><span class="p">,</span> <span class="s">"i j k"</span><span class="p">,</span> <span class="s">"l m"</span><span class="p">,</span> <span class="s">"n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">pending</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">phrases</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">pending</span> <span class="o">&lt;-</span> <span class="nx">phrase</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">close</span><span class="p">(</span><span class="nx">pending</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">done</span><span class="p">,</span> <span class="nx">pending</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="nx">done</span><span class="p">,</span> <span class="nx">pending</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">done</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">done</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">done</span> <span class="kd">chan</span><span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{},</span> <span class="nx">pending</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">id</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">phrase</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">pending</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker #%d says: %s...\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>In this approach, we rely on the data provider to close the <code>pending</code> channel at the right time. If the input data arrives in chunks at an unpredictable rate, using a semaphore may be more convenient.</p><p>Another difference is that in the first approach (with a semaphore), we start many short-lived goroutines, while in the second (with an input channel), we use two long-lived ones.</p></div><div class="boxed"><p><strong>✎ Exercise: N workers</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="closing-a-buffered-channel">Closing a buffered channel</h2><p>As we know, reading from an unbuffered channel when it is closed returns a zero value and a <code>false</code> status:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 0 false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 0 false
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 0 false
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>A buffered channel behaves the same way when the buffer is empty. However, if there are values in the buffer, it's different:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl"><span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 1 true
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 2 true
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">ok</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// 0 false
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>As long as there are values in the buffer, the channel returns those values and a <code>true</code> status. Once all values are read, it returns a zero value and a <code>false</code> status, just like a regular channel.</p><p>This allows the sender to close the channel at any time without worrying about leftover values. The receiver will read them anyway:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">stream</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Sending..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">2</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">3</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Sent and closed!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Receiving..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">val</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">stream</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%v "</span><span class="p">,</span> <span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Received!"</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><h2 id="nil-channel">nil channel</h2><p>Like any type in Go, channels have a zero value, which is <code>nil</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>A nil channel is an ugly beast:</p><ul><li>Writing to a nil channel blocks the goroutine forever.</li><li>Reading from a nil channel blocks the goroutine forever.</li><li>Closing a nil channel causes a panic.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stream</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="o">&lt;-</span><span class="nx">stream</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">stream</span> <span class="kd">chan</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="nb">close</span><span class="p">(</span><span class="nx">stream</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/channels/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/channels/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Nil channels can be useful in certain cases. We'll look at one of them in the next chapter. In general, try to avoid nil channels unless you absolutely need them.</p><h2 id="keep-it-up">Keep it up</h2><p>We've mostly figured out channels in Go. Now you know how to:</p><ul><li>close channels;</li><li>iterate over channels;</li><li>use directions;</li><li>use the done channel;</li><li>work with buffered channels;</li><li>limit the number of workers;</li><li>(not) use nil channels.</li></ul><p>In the next chapter, we'll discuss <a href="https://antonz.org/go-concurrency/pipelines/">pipelines</a>.</p><p><a class="button" href="https://antonz.gumroad.com/l/go-concurrency">Buy for $25
+</a>&nbsp;
+or <a href="https://antonz.org/go-concurrency/">read online</a></p><script defer="" src="./Gist of Go_ Channels_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2024-12-03 08:00:00 +0000 UTC">03 Dec, 2024</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/self-promo/">Banned for self-promo</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-concurrency/pipelines/">Gist of Go: Pipelines</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/wait-groups/">Gist of Go: Wait groups</a></p><p><a href="https://antonz.org/go-concurrency/goroutines/">Gist of Go: Goroutines</a></p><p><a href="https://antonz.org/go-concurrency/">Gist of Go: Concurrency</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

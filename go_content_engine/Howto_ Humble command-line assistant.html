@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- saved from url=(0025)https://antonz.org/howto/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Howto: Humble command-line assistant</title>
+<meta name="description" content="You ask, and howto answers. That&#39;s the deal."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897965270&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fhowto%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897965270&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Howto_ Humble command-line assistant_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/howto/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Howto: Humble command-line assistant"><meta property="og:description" content="You ask, and howto answers. That&#39;s the deal."><meta property="og:url" content="https://antonz.org/howto/"><meta property="og:image" content="https://antonz.org/howto/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Howto: Humble command-line assistant"><meta name="twitter:description" content="You ask, and howto answers. That&#39;s the deal."><meta name="twitter:url" content="https://antonz.org/howto/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/howto/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Howto_ Humble command-line assistant_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/howto/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Howto: Humble command-line assistant</h1></header><p>After many years of working with CLI tools (and even writing books on the subject), my skills are far from perfect. So I created Howto — a simple AI command line assistant to help with all kinds of tasks.</p><p>Describe the task, and Howto will suggest a solution:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto curl example.org but print only the headers
+</span></span><span class="line"><span class="cl">curl -I example.org
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">The `curl` command is used to transfer data from or to a server.
+</span></span><span class="line"><span class="cl">The `-I` option tells `curl` to fetch the HTTP headers only, without the body
+</span></span><span class="line"><span class="cl">content.
+</span></span></code></pre></div><p>Howto does not interfere with your workflow. It's not an alternate shell or "intelligent terminal" or anything. You ask, and Howto answers. That's the deal.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Usage: howto [-h] [-v] [-run] [question]
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">A humble command-line assistant.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Options:
+</span></span><span class="line"><span class="cl">  -h, --help      Show this help message and exit
+</span></span><span class="line"><span class="cl">  -v, --version   Show version information and exit
+</span></span><span class="line"><span class="cl">  -run            Run the last suggested command
+</span></span><span class="line"><span class="cl">  question        Describe the task to get a command suggestion
+</span></span><span class="line"><span class="cl">                  Use '+' to ask a follow up question
+</span></span></code></pre></div><p>However, Howto has some convenience features that you may find useful. Read on for details.</p><h2 id="follow-ups">Follow-ups</h2><p>If you're not satisfied with an answer, refine it or ask a follow-up question by starting with <code>+</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto a command that works kinda like diff but compares differently
+</span></span><span class="line"><span class="cl">comm file1 file2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">The `comm` command compares two sorted files line by line and outputs three
+</span></span><span class="line"><span class="cl">columns: lines unique to the first file, lines unique to the second file, and
+</span></span><span class="line"><span class="cl">lines common to both files.
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto + yeah right i need only the intersection
+</span></span><span class="line"><span class="cl">comm -12 file1 file2
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">The `comm` command compares two sorted files line by line.
+</span></span><span class="line"><span class="cl">The `-12` option suppresses the first and second columns, showing only lines
+</span></span><span class="line"><span class="cl">common to both files (the intersection).
+</span></span></code></pre></div><p>If you don't use <code>+</code>, Howto will forget the previous conversation and treat your question as new.</p><p>This feature was a game changer for me. Sometimes the AI doesn't get the answer quite right the first time, but with follow-ups it works very well.</p><p>You are not limited to a single follow-up, of course. The exchange can be quite lengthy:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto git revert commit
+</span></span><span class="line"><span class="cl">git revert &lt;commit&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Reverts the changes introduced by the specified commit by creating a new commit
+</span></span><span class="line"><span class="cl">with the inverse changes. This is a safe way to undo changes as it doesn't
+</span></span><span class="line"><span class="cl">rewrite history.
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto +no, rollback it
+</span></span><span class="line"><span class="cl">git reset --hard &lt;commit&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Resets the current branch to the specified commit, discarding all changes after
+</span></span><span class="line"><span class="cl">that commit. This rewrites history and should be used with caution, especially
+</span></span><span class="line"><span class="cl">on shared branches.
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto +keep the changes
+</span></span><span class="line"><span class="cl">git reset --soft &lt;commit&gt;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Resets the current branch to the specified commit, but keeps the changes as
+</span></span><span class="line"><span class="cl">staged changes. This allows you to modify the changes before creating a new
+</span></span><span class="line"><span class="cl">commit.
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto +last commit i mean
+</span></span><span class="line"><span class="cl">git reset --soft HEAD^
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Resets the current branch to the commit before the last commit (HEAD^), keeping
+</span></span><span class="line"><span class="cl">the changes from the last commit as staged changes.
+</span></span></code></pre></div><p>It's never easy with Git, I guess.</p><h2 id="run-command">Run command</h2><p>When satisfied with the suggested command, run <code>howto -run</code> to execute it without manually copying and pasting:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto curl example.org but print only the headers
+</span></span><span class="line"><span class="cl">curl -I example.org
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">The `curl` command is used to transfer data from or to a server.
+</span></span><span class="line"><span class="cl">The `-I` option tells `curl` to fetch the HTTP headers only, without the body
+</span></span><span class="line"><span class="cl">content.
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ howto -run
+</span></span><span class="line"><span class="cl">curl -I example.org
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">HTTP/1.1 200 OK
+</span></span><span class="line"><span class="cl">Content-Type: text/html
+</span></span><span class="line"><span class="cl">ETag: "84238dfc8092e5d9c0dac8ef93371a07:1736799080.121134"
+</span></span><span class="line"><span class="cl">Last-Modified: Mon, 13 Jan 2025 20:11:20 GMT
+</span></span><span class="line"><span class="cl">Cache-Control: max-age=2804
+</span></span><span class="line"><span class="cl">Date: Sun, 09 Feb 2025 12:54:51 GMT
+</span></span><span class="line"><span class="cl">Connection: keep-alive
+</span></span></code></pre></div><p>Dead simple, but works reasonably well.</p><h2 id="configure-ai-provider">Configure AI provider</h2><p>Howto works with any OpenAI-compatible provider (like <a href="https://platform.openai.com/docs/overview">OpenAI</a> itself, <a href="https://openrouter.ai/docs/">OpenRouter</a>, <a href="https://docs.nebius.com/studio/inference/api">Nebius</a>, <a href="https://ai.google.dev/gemini-api/docs/openai">Gemini</a> or <a href="https://docs.x.ai/docs/overview">Grok</a>) and local <a href="https://ollama.com/">Ollama</a> models.</p><p>To change the provider, set the <code>HOWTO_AI_URL</code>, <code>HOWTO_AI_TOKEN</code> and <code>HOWTO_AI_MODEL</code> environment variables, and you are good to go.</p><p>You can also customize the prompt (<code>HOWTO_PROMPT</code>), although the default works pretty well for me.</p><h2 id="final-thoughts">Final thoughts</h2><p>I find Howto quite handy in my daily terminal work. If you are interested, check it out:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">brew tap nalgeon/howto https://github.com/nalgeon/howto
+</span></span><span class="line"><span class="cl">brew install howto
+</span></span></code></pre></div><p>Or:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">go install github.com/nalgeon/howto@latest
+</span></span></code></pre></div><p>See <a href="https://github.com/nalgeon/howto">github.com/nalgeon/howto</a> for installation, configuration and usage details.</p><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-02-22 12:00:00 +0000 UTC">22 Feb, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/projects/">projects</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-map-shrink/">Go's map does not shrink</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/sandboxes/">Sandboxes</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/vscode-proofread/">Proofread and translate text in VS Code</a></p><p><a href="https://antonz.org/sqlean-time/">High-precision date/time in SQLite</a></p><p><a href="https://antonz.org/go-concurrency/">Gist of Go: Concurrency</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

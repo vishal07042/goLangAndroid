@@ -1,0 +1,56 @@
+// Prefix for local storage key.
+const prefix = (() => {
+    const namespace =
+        document.querySelector("article").dataset.namespace ?? "global";
+    const path = window.location.pathname.split("/");
+    return namespace + "." + path[path.length - 2];
+})();
+
+// Exercise code snippets.
+const exercises = (() => {
+    const snips = document.querySelectorAll("codapi-snippet");
+    const isExercise = (id) =>
+        id != undefined && id != null && id.startsWith("ex");
+    return Array.from(snips).filter((snip) => isExercise(snip.id));
+})();
+
+// Event handlers for code snippets.
+for (const snip of exercises) {
+    // Open playground in a new tab.
+    snip.addEventListener("playground", (e) => {
+        const url = e.target.dataset.playground;
+        window.open(url, "_blank");
+    });
+    // Reset code to initial state.
+    snip.addEventListener("reset", (e) => {
+        const id = e.target.id;
+        localStorage.removeItem(`${prefix}.${id}`);
+        const initialCode = e.target.getAttribute("initialCode");
+        if (initialCode) {
+            e.target.code = initialCode;
+        }
+    });
+    // Show/hide solution.
+    snip.addEventListener("solution", (e) => {
+        const id = e.target.id;
+        document.getElementById(id + "-solution").toggleAttribute("hidden");
+    });
+}
+
+// Load saved code from local storage into exercises.
+for (const snip of exercises) {
+    snip.setAttribute("initialCode", snip.code);
+    const code = localStorage.getItem(`${prefix}.${snip.id}`);
+    if (code) {
+        snip.code = code;
+    }
+}
+
+// Save code from exercises into local storage after execution.
+for (const snip of exercises) {
+    snip.addEventListener("execute", (e) => {
+        const id = e.target.id;
+        const code = e.detail;
+        localStorage.setItem(`${prefix}.${id}`, code);
+    });
+}

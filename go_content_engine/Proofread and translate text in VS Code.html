@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<!-- saved from url=(0036)https://antonz.org/vscode-proofread/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Proofread and translate text in VS Code</title>
+<meta name="description" content="A simple alternative to DeepL, Grammarly, and other similar tools."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897911361&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fvscode-proofread%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897911361&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Proofread and translate text in VS Code_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/vscode-proofread/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Proofread and translate text in VS Code"><meta property="og:description" content="A simple alternative to DeepL, Grammarly, and other similar tools."><meta property="og:url" content="https://antonz.org/vscode-proofread/"><meta property="og:image" content="https://antonz.org/vscode-proofread/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Proofread and translate text in VS Code"><meta name="twitter:description" content="A simple alternative to DeepL, Grammarly, and other similar tools."><meta name="twitter:url" content="https://antonz.org/vscode-proofread/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/vscode-proofread/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Proofread and translate text in VS Code_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/vscode-proofread/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Proofread and translate text in VS Code</h1></header><p>As a non-native English speaker, I've always wanted a proofreading feature in VS Code to help me write better blog posts and comments.</p><p>Since I got tired of waiting for it, I built one myself!</p><div class="row"><div class="col-xs-12 col-md-10"><vsc-controller class="vsc-controller" style="z-index: 9999999 !important;"><template shadowrootmode="open"><style>
+      * {
+        line-height: 1.8em;
+        font-family: sans-serif;
+        font-size: 13px;
+      }
+      
+      :host(:hover) #controls {
+        display: inline-block;
+      }
+      
+      /* Hide the automatic layer without disturbing any explicit override. */
+      :host(.vsc-hidden) #controller {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+      }
+
+      /* Explicit show and temporary speed feedback outrank automatic hiding,
+         including startHidden, media visibility, and site autohide. */
+      :host([data-vsc-visibility="show"]) #controller,
+      :host(.vsc-show) #controller {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 0.3 !important;
+      }
+
+      /* Explicit hide and unavailable media are final: flashes and user show
+         overrides must not reveal them. */
+      :host([data-vsc-visibility="hide"]) #controller,
+      :host(.vsc-nosource) #controller {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+      }
+      
+      #controller {
+        position: absolute;
+        top: 0;
+        left: 0;
+        background: black;
+        color: white;
+        border-radius: 6px;
+        padding: 4px;
+        margin: 10px 10px 10px 15px;
+        cursor: default;
+        z-index: 9999999;
+        white-space: nowrap;
+      }
+      
+      #controller:hover {
+        opacity: 0.7;
+      }
+      
+      #controller:hover>.draggable {
+        margin-right: 0.8em;
+      }
+      
+      #controls {
+        display: none;
+        vertical-align: middle;
+      }
+      
+      #controller.dragging {
+        cursor: -webkit-grabbing;
+        opacity: 0.7;
+      }
+      
+      #controller.dragging #controls {
+        display: inline-block;
+      }
+      
+      .draggable {
+        cursor: -webkit-grab;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.8em;
+        height: 1.4em;
+        text-align: center;
+        vertical-align: middle;
+        box-sizing: border-box;
+        touch-action: none;
+      }
+      
+      .draggable:active {
+        cursor: -webkit-grabbing;
+      }
+      
+      button {
+        opacity: 1;
+        cursor: pointer;
+        color: black;
+        background: white;
+        font-weight: normal;
+        border-radius: 5px;
+        padding: 1px 5px 3px 5px;
+        font-size: inherit;
+        line-height: inherit;
+        border: 0px solid white;
+        font-family: "Lucida Console", Monaco, monospace;
+        margin: 0px 2px 2px 2px;
+        transition: background 0.2s, color 0.2s;
+      }
+      
+      button:focus {
+        outline: 0;
+      }
+      
+      button:hover {
+        opacity: 1;
+        background: #2196f3;
+        color: #ffffff;
+      }
+      
+      button:active {
+        background: #2196f3;
+        color: #ffffff;
+        font-weight: bold;
+      }
+      
+      button.rw {
+        opacity: 0.65;
+      }
+    </style><div id="controller" style="top: 287.864px; left: 327.709px; opacity: 0.3;"><span data-action="drag" class="draggable" style="font-size: 14px;">1.00</span><span id="controls" style="font-size: 14px; line-height: 14px;"><button data-action="rewind" class="rw">«</button><button data-action="slower">−</button><button data-action="faster">+</button><button data-action="advance" class="rw">»</button></span></div></template></vsc-controller><video controls="">
+<source src="demo.mp4" type="video/mp4"></video></div></div><p>The extension offers <em>Proofread</em> and <em>Translate</em> commands in VS Code. It's a simple alternative to DeepL, Grammarly, and other similar tools.</p><p>Notable features:</p><ul><li>Uses Copilot, Ollama, or OpenAI, whichever suits you best.</li><li>Configurable language model and prompts (with good defaults).</li><li>Supports many target languages (default is English).</li></ul><p>Read more and install on the VS Code Marketplace:</p><p><a class="button" href="https://marketplace.visualstudio.com/items?itemName=nalgeon.proofread">Proofread
+</a>&nbsp;
+<a href="https://github.com/nalgeon/vscode-proofread"><i class="fab fa-github"></i> Source code</a></p><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-01-02 10:00:00 +0000 UTC">02 Jan, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/projects/">projects</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-concurrency/time/">Gist of Go: Time</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-concurrency/context/">Gist of Go: Context</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/sqlean-time/">High-precision date/time in SQLite</a></p><p><a href="https://antonz.org/go-concurrency/">Gist of Go: Concurrency</a></p><p><a href="https://antonz.org/grep-by-example/">Grep by example: Interactive guide</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

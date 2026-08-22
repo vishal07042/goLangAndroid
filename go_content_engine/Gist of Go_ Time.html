@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<!-- saved from url=(0039)https://antonz.org/go-concurrency/time/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Gist of Go: Time</title>
+<meta name="description" content="Techniques for handling time in concurrent programs."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897895730&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-concurrency%2Ftime%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897895730&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Gist of Go_ Time_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-concurrency/time/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Gist of Go: Time"><meta property="og:description" content="Techniques for handling time in concurrent programs."><meta property="og:url" content="https://antonz.org/go-concurrency/time/"><meta property="og:image" content="https://antonz.org/go-concurrency/time/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Gist of Go: Time"><meta name="twitter:description" content="Techniques for handling time in concurrent programs."><meta name="twitter:url" content="https://antonz.org/go-concurrency/time/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-concurrency/time/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Gist of Go_ Time_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-concurrency/time/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Gist of Go: Time</h1></header><p><em>This is a chapter from my book on <a href="https://antonz.org/go-concurrency">Go concurrency</a>, which teaches the topic from the ground up through interactive examples.</em></p><p>In this chapter, we'll look at some techniques for handling time in concurrent programs.</p><div class="row"><div class="col-xs-12 col-sm-6 col-md-"><ul><li><a href="https://antonz.org/go-concurrency/time/#throttling">Throttling</a></li><li><a href="https://antonz.org/go-concurrency/time/#backpressure">Backpressure</a></li><li><a href="https://antonz.org/go-concurrency/time/#operation-timeout">Operation timeout</a></li><li><a href="https://antonz.org/go-concurrency/time/#timer">Timer</a></li></ul></div><div class="col-xs-12 col-sm-6 col-md-"><ul><li><a href="https://antonz.org/go-concurrency/time/#timer-reset">Timer reset</a></li><li><a href="https://antonz.org/go-concurrency/time/#ticker">Ticker</a></li><li><a href="https://antonz.org/go-concurrency/time/#keep-it-up">Keep it up</a></li></ul></div></div><h2 id="throttling">Throttling</h2><p>Suppose we have work that needs to be done in large quantities:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Something very important, but not very fast.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-throttling-work" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The easiest way is to process sequentially:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"4 calls took"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-throttling-work" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Four calls of 100 ms each take a total of 400 ms when executed one after the other.</p><p>Of course, it's faster to do the work in parallel with N handlers like this:</p><ul><li>If there's a free handler, give it the task.</li><li>Otherwise, wait until one becomes available.</li></ul><p>In the "Channels" chapter we solved a similar problem using a semaphore. Recall the principle:</p><ul><li>Create an empty channel with a buffer size of N.</li><li>Before starting, a goroutine puts a token (some value) into the channel.</li><li>Once finished, the goroutine takes a token from the channel.</li></ul><p>Let's create a wrapper <code>throttle(n, fn)</code> to ensure concurrent execution. We'll set up a <code>sema</code> channel and make sure that no more than <code>n</code> work functions are running at the same time:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">throttle</span><span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">fn</span> <span class="kd">func</span><span class="p">())</span> <span class="p">(</span><span class="nx">handle</span> <span class="kd">func</span><span class="p">(),</span> <span class="nx">wait</span> <span class="kd">func</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Semaphore for n goroutines.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">sema</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{},</span> <span class="nx">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Execute fn functions concurrently, but not more than n at a time.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">handle</span> <span class="p">=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nf">fn</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Wait until all functions have finished.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">wait</span> <span class="p">=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="k">range</span> <span class="nx">n</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">handle</span><span class="p">,</span> <span class="nx">wait</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-throttling-throttle" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now the client calls the <code>work()</code> function through the wrapper, not directly:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">handle</span><span class="p">,</span> <span class="nx">wait</span> <span class="o">:=</span> <span class="nf">throttle</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nx">work</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"4 calls took"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-throttling-work s-throttling-throttle" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Here's how it works:</p><ul><li>The first and second calls start processing immediately;</li><li>The third and fourth wait for the previous two to finish.</li></ul><p>With two handlers, 4 calls complete in 200 ms.</p><p>Such throttling works well when the parallelism level <code>n</code> and the individual <code>work()</code> times match (more or less) the rate of <code>handle()</code> calls. Then each call has a good chance of being processed immediately or with a small delay.</p><p>However, if there are many more calls than the handlers can manage, the system will slow down. Each <code>work()</code> will still take 100 ms, but <code>handle()</code> calls will hang, waiting for a place in a semaphore. This isn't a big deal for data pipelines, but could be problematic for online requests.</p><p>Sometimes, clients may prefer to get an immediate error when all handlers are busy. We need another approach for such cases.</p><h2 id="backpressure">Backpressure</h2><p>Let's change the <code>throttle()</code> logic:</p><ul><li>If there's room in the semaphore, execute the function.</li><li>Otherwise, return an error immediately.</li></ul><p>This way, the client doesn't have to wait for a stuck call.</p><p>The select statement will help us once again.</p><p>Before:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Execute fn functions concurrently,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// but not more than n at a time.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">handle</span> <span class="p">=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">fn</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>After:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Execute fn functions concurrently,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// but not more than n at a time.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">handle</span> <span class="p">=</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nx">sema</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nf">fn</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="o">&lt;-</span><span class="nx">sema</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">"busy"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Let's recall how select works:</p><ul><li>Checks which cases are not blocked.</li><li>If multiple cases are ready, randomly selects one to execute.</li><li>If all cases are blocked, waits until one is ready.</li></ul><p>The third point (all cases are blocked) actually splits into two:</p><ul><li>If there's <em>no default</em> case, select waits until one is ready.</li><li>If there is a <em>default</em> case, select executes it.</li></ul><p>The default case is perfect for our situation:</p><ul><li>If there's a token in the <code>sema</code> channel, we run <code>fn</code>.</li><li>Otherwise, we return a "busy" error without waiting.</li></ul><p>Let's look at the client:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">handle</span><span class="p">,</span> <span class="nx">wait</span> <span class="o">:=</span> <span class="nf">throttle</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nx">work</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="o">:=</span> <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1st call, error:"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="p">=</span> <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2nd call, error:"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="p">=</span> <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"3rd call, error:"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="p">=</span> <span class="nf">handle</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"4th call, error:"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"4 calls took"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="backpressure.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The first two calls ran concurrently (each took 100 ms), while the third and fourth got an error immediately. All calls were handled in 100 ms.</p><p>Of course, this approach (sometimes called <em>backpressure</em>) requires some awareness on the part of the client. The client should understand that a "busy" error means overload, and either delay further <code>handle()</code> calls or reduce their frequency.</p><div class="boxed"><p><strong>✎ Exercise: Queue with(out) blocking</strong></p><p>Practice is essential for turning knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of interactive exercises with automated tests — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you're okay with just reading for now, let's continue.</p></div><h2 id="operation-timeout">Operation timeout</h2><p>Here's a function that normally takes 10 ms, but in 20% of the calls it takes 200 ms:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">work</span><span class="p">()</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span> <span class="p">&lt;</span> <span class="mi">8</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">200</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-timeout-work" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Let's say we don't want to wait more than 50 ms. So, we set a <em>timeout</em> — the maximum time we're willing to wait for a response. If the operation doesn't complete within the timeout, we'll consider it an error.</p><p>Let's create a wrapper that runs the given function with the given timeout:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">withTimeout</span><span class="p">(</span><span class="nx">timeout</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">,</span> <span class="nx">fn</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="kt">int</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>We'll call it like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="k">range</span> <span class="mi">10</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">timeout</span> <span class="o">:=</span> <span class="mi">50</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">answer</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">withTimeout</span><span class="p">(</span><span class="nx">timeout</span><span class="p">,</span> <span class="nx">work</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Took longer than %v. Error: %v\n"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Took %v. Result: %v\n"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">),</span> <span class="nx">answer</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timeout-work s-timeout-with" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Here's the idea behind <code>withTimeout()</code>:</p><ul><li>Run the given <code>fn()</code> in a separate goroutine.</li><li>Wait for the <code>timeout</code> period.</li><li>If <code>fn()</code> returns a result, return it.</li><li>If it doesn't finish in time, return an error.</li></ul><p>Here's how you can implement it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// withTimeout executes a function with a given timeout.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">withTimeout</span><span class="p">(</span><span class="nx">timeout</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">,</span> <span class="nx">fn</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="kt">int</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">result</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">result</span> <span class="p">=</span> <span class="nf">fn</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">close</span><span class="p">(</span><span class="nx">done</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">done</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">result</span><span class="p">,</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">time</span><span class="p">.</span><span class="nf">After</span><span class="p">(</span><span class="nx">timeout</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">"timeout"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-timeout-with" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Everything here is familiar except for <code>time.After()</code>. This stdlib function returns a channel that is initially empty, but receives a value after the timeout period. This allows the select statement to choose the correct case:</p><ul><li>The <code>&lt;-done</code> case, if <code>fn()</code> finishes before the timeout (returns the result);</li><li>The <code>&lt;-time.After()</code> case, if <code>fn()</code> doesn't finish in time (returns an error).</li></ul><div class="boxed"><p><strong>✎ Exercise: Reimplementing time.After</strong></p><p>Practice is essential for turning knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of interactive exercises with automated tests — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you're okay with just reading for now, let's continue.</p></div><h2 id="timer">Timer</h2><p>Sometimes you want to perform an action after some time instead of immediately. In Go, you can use a <em>timer</em> to do this.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"work done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-timer-work" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">eventTime</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">timer</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTimer</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>  <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">eventTime</span> <span class="p">=</span> <span class="o">&lt;-</span><span class="nx">timer</span><span class="p">.</span><span class="nx">C</span>                       <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>		<span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// enough time for the timer to expire
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">150</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"delayed function started after %v\n"</span><span class="p">,</span> <span class="nx">eventTime</span><span class="p">.</span><span class="nf">Sub</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-work" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>time.NewTimer()</code> creates a new timer ➊ that will expire (trigger) after a specified duration. A timer is a structure with a <code>C</code> channel to which it sends the current time when expired ➋. This way, the <code>work()</code> function will only execute after the timer expires.</p><p>If you stop a timer, no value is sent to the <code>C</code> channel, preventing <code>work()</code> from running:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">timer</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTimer</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="o">&lt;-</span><span class="nx">timer</span><span class="p">.</span><span class="nx">C</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"10ms has passed..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// the timer hasn't expired yet
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">timer</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"delayed function canceled after %v\n"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-work" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>Stop()</code> stops the timer and returns <code>true</code> if it hasn't expired yet. In the above example, we stopped the timer after only 10 ms, so it returns <code>true</code>.</p><blockquote><p>You may notice a problem: since <code>timer.C</code> never receives a value, our goroutine hangs. You can fix this with a select statement or a library function, which we'll discuss later.</p></blockquote><p>If you stop the timer too late, <code>Stop()</code> will return <code>false</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">timer</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTimer</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="o">&lt;-</span><span class="nx">timer</span><span class="p">.</span><span class="nx">C</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">150</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"150ms has passed..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// too late, the timer has already expired
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="p">!</span><span class="nx">timer</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"too late to cancel"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-work" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>For delayed function execution, you don't need to manually create a timer and read from its channel. There's a handy wrapper <code>time.AfterFunc()</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">AfterFunc</span><span class="p">(</span><span class="mi">100</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">,</span> <span class="nx">work</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// enough time for the timer to expire
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">150</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-work" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>AfterFunc(d, f)</code> waits for duration <code>d</code> and then executes function <code>f</code>. It returns a timer that you can cancel before execution starts:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">timer</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">AfterFunc</span><span class="p">(</span><span class="mi">100</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">,</span> <span class="nx">work</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"10ms has passed..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// the timer hasn't expired yet
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">timer</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"execution canceled"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-work" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>In this case, canceling execution with <code>timer.Stop()</code> won't cause any goroutines to hang (a good reason to use library functions instead of custom ones).</p><div class="boxed"><p><strong>✎ Exercise: Reimplementing time.AfterFunc</strong></p><p>Practice is essential for turning knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of interactive exercises with automated tests — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you're okay with just reading for now, let's continue.</p></div><h2 id="timer-reset">Timer reset</h2><p>Suppose we have a function that reads tokens from the input channel and alerts if a value does not appear in a channel after an hour:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">token</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">consumer</span><span class="p">(</span><span class="nx">cancel</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">in</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">timeout</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">in</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// do stuff
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">time</span><span class="p">.</span><span class="nf">After</span><span class="p">(</span><span class="nx">timeout</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// log warning
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">cancel</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-timer-reset-after" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Let's write a client that measures the memory usage after 100K channel sends:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">cancel</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nb">close</span><span class="p">(</span><span class="nx">cancel</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">tokens</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">consumer</span><span class="p">(</span><span class="nx">cancel</span><span class="p">,</span> <span class="nx">tokens</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nf">measure</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="k">range</span> <span class="mi">100000</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">tokens</span> <span class="o">&lt;-</span> <span class="nx">token</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-reset-after" template="timer-reset-1.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><details><summary>What is measure</summary><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// measure returns the number of bytes allocated
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and the number of allocations performed by the function fn.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">measure</span><span class="p">(</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">m</span> <span class="nx">runtime</span><span class="p">.</span><span class="nx">MemStats</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">runtime</span><span class="p">.</span><span class="nf">GC</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">runtime</span><span class="p">.</span><span class="nf">ReadMemStats</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">m</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">allocBefore</span><span class="p">,</span> <span class="nx">mallocsBefore</span> <span class="o">:=</span> <span class="nx">m</span><span class="p">.</span><span class="nx">TotalAlloc</span><span class="p">,</span> <span class="nx">m</span><span class="p">.</span><span class="nx">Mallocs</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nf">fn</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">runtime</span><span class="p">.</span><span class="nf">GC</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">runtime</span><span class="p">.</span><span class="nf">ReadMemStats</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">m</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">allocAfter</span><span class="p">,</span> <span class="nx">mallocsAfter</span> <span class="o">:=</span> <span class="nx">m</span><span class="p">.</span><span class="nx">TotalAlloc</span><span class="p">,</span> <span class="nx">m</span><span class="p">.</span><span class="nx">Mallocs</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">alloc</span> <span class="o">:=</span> <span class="nx">allocAfter</span> <span class="o">-</span> <span class="nx">allocBefore</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mallocs</span> <span class="o">:=</span> <span class="nx">mallocsAfter</span> <span class="o">-</span> <span class="nx">mallocsBefore</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Memory used: %d KB, # allocations: %d\n"</span><span class="p">,</span> <span class="nx">alloc</span><span class="o">/</span><span class="mi">1024</span><span class="p">,</span> <span class="nx">mallocs</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></details><p>Behind the scenes, each <code>time.After</code> creates a timer that is later freed by the garbage collector. So our for loop is essentially creating a miriad of timers, doing a lot of allocations, and creating unnecessary work for the GC. This is usually not what we want.</p><p>To avoid creating a timer on each loop iteration, you can create it at the beginning and reset it before moving on to the next iteration. The <code>Reset</code> method in Go 1.23+ is perfect for this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">consumer</span><span class="p">(</span><span class="nx">cancel</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">in</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">timeout</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">timer</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTimer</span><span class="p">(</span><span class="nx">timeout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">timer</span><span class="p">.</span><span class="nf">Reset</span><span class="p">(</span><span class="nx">timeout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">in</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// do stuff
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">timer</span><span class="p">.</span><span class="nx">C</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// log warning
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">cancel</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="timer-reset-2.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>This approach does not create new timers, so the GC does not need to collect them.</p><h3 id="reset-in-go-pre-123">Reset in Go pre-1.23</h3><p>Due to implementation quirks in Go versions prior to 1.23, <code>Reset</code> should only be called on an already stopped or expired timer with an empty output channel. So, to reset the timer correctly, you have to use a helper function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// resetTimer stops, drains and resets the timer.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">resetTimer</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Timer</span><span class="p">,</span> <span class="nx">d</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Duration</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">!</span><span class="nx">t</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">t</span><span class="p">.</span><span class="nx">C</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Reset</span><span class="p">(</span><span class="nx">d</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-timer-reset-manual" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">consumer</span><span class="p">(</span><span class="nx">cancel</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">in</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">timeout</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Hour</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">timer</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTimer</span><span class="p">(</span><span class="nx">timeout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">resetTimer</span><span class="p">(</span><span class="nx">timer</span><span class="p">,</span> <span class="nx">timeout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">in</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// do stuff
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">timer</span><span class="p">.</span><span class="nx">C</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// log warning
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">cancel</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-timer-reset-manual" template="timer-reset-2.go" files="go.mod" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>See the <a href="https://antonz.org/timer-reset/">Resetting timers in Go</a> article for details if you are interested.</p><h3 id="timeafterfunc">time.AfterFunc</h3><p>To make matters worse, <code>time.AfterFunc</code> also creates a timer, but a very different one. It has a nil <code>C</code> channel, so the <code>Reset</code> method works differently:</p><ul><li>If the timer is still active (not stopped, not expired), <code>Reset</code> clears the timeout, effectively restarting the timer.</li><li>If the timer is already stopped or expired, <code>Reset</code> schedules a new function execution.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">start</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">work</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"work done after %dms\n"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// run work after 10 milliseconds
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">timeout</span> <span class="o">:=</span> <span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>  <span class="c1">// ignore the data race for simplicity
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">t</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">AfterFunc</span><span class="p">(</span><span class="nx">timeout</span><span class="p">,</span> <span class="nx">work</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// wait for 5 to 15 milliseconds
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">delay</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="mi">5</span><span class="o">+</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">11</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">delay</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%dms has passed...\n"</span><span class="p">,</span> <span class="nx">delay</span><span class="p">.</span><span class="nf">Milliseconds</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Reset behavior depends on whether the timer has expired
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">t</span><span class="p">.</span><span class="nf">Reset</span><span class="p">(</span><span class="nx">timeout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="p">=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">50</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>If the timer has not expired, <code>Reset</code> clears the timeout:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">8ms has passed...
+</span></span><span class="line"><span class="cl">work done after 10ms
+</span></span></code></pre></div><p>If the timer has expired, <code>Reset</code> schedules a new function call:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">work done after 10ms
+</span></span><span class="line"><span class="cl">13ms has passed...
+</span></span><span class="line"><span class="cl">work done after 10ms
+</span></span></code></pre></div><p>To reiterate:</p><ul><li>Go ≤ 1.22: For a <code>Timer</code> created with <code>NewTimer</code>, <code>Reset</code> should only be called on stopped or expired timers with drained channels.</li><li>Go ≥ 1.23: For a <code>Timer</code> created with <code>NewTimer</code>, it's safe to call <code>Reset</code> on timers in any state (active, stopped or expired). No channel drain is required.</li><li>For a <code>Timer</code> created with <code>AfterFunc</code>, <code>Reset</code> either reschedules the function (if the timer is still active) or schedules the function to run again (if the timer has stopped or expired).</li></ul><p>Timers are not the most obvious things in Go, are they?</p><h2 id="ticker">Ticker</h2><p>Sometimes you want to perform an action at regular intervals. There's a tool for this in Go called a <em>ticker</em>. A ticker is like a timer, but it keeps firing until you stop it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">work</span><span class="p">(</span><span class="nx">at</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s: work done\n"</span><span class="p">,</span> <span class="nx">at</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="s">"15:04:05.000"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ticker</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTicker</span><span class="p">(</span><span class="mi">50</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">ticker</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">at</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ticker</span><span class="p">.</span><span class="nx">C</span>
+</span></span><span class="line"><span class="cl">            <span class="nf">work</span><span class="p">(</span><span class="nx">at</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// enough for 5 ticks
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">260</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>NewTicker(d)</code> creates a ticker that sends the current time to the channel <code>C</code> at interval <code>d</code>. You must stop the ticker eventually with <code>Stop()</code> to free up resources.</p><p>In our case, the interval is 50 ms, which allows for 5 ticks.</p><p>If the channel reader can't keep up with the ticker, the ticker will skip ticks:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">work</span><span class="p">(</span><span class="nx">at</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s: work done\n"</span><span class="p">,</span> <span class="nx">at</span><span class="p">.</span><span class="nf">Format</span><span class="p">(</span><span class="s">"15:04:05.000"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ticker</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">NewTicker</span><span class="p">(</span><span class="mi">50</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">ticker</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">at</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ticker</span><span class="p">.</span><span class="nx">C</span>
+</span></span><span class="line"><span class="cl">            <span class="nf">work</span><span class="p">(</span><span class="nx">at</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// enough for 3 ticks because of the slow work()
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">260</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/time/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/time/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>In this case, the receiver starts to fall behind after the second tick.</p><p>As you can see, the ticks don't pile up; they adapt to the slow receiver.</p><div class="boxed"><p><strong>✎ Exercises: Scheduler +1 more</strong></p><p>Practice is essential for turning knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of interactive exercises with automated tests — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you're okay with just reading for now, let's continue.</p></div><h2 id="keep-it-up">Keep it up</h2><p>Now you know that handling time in concurrent programs is not about (ab)using <code>time.Sleep</code>. Here are some useful tools you've learned:</p><ul><li>Timeouts limit operation time.</li><li>Timers help with delayed operations.</li><li>Tickers are for periodic actions.</li><li>Default case in select allows nowait processing.</li></ul><p>In the next chapter, we'll work with <a href="https://antonz.org/go-concurrency/context/">context</a>.</p><p><a class="button" href="https://antonz.gumroad.com/l/go-concurrency">Buy for $25
+</a>&nbsp;
+or <a href="https://antonz.org/go-concurrency/">read online</a></p><script defer="" src="./Gist of Go_ Time_files/snippet.js.download"></script><script defer="" src="./Gist of Go_ Time_files/exercise.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2024-12-22 10:00:00 +0000 UTC">22 Dec, 2024</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-concurrency/pipelines/">Gist of Go: Pipelines</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/vscode-proofread/">Proofread and translate text in VS Code</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/pipelines/">Gist of Go: Pipelines</a></p><p><a href="https://antonz.org/go-concurrency/channels/">Gist of Go: Channels</a></p><p><a href="https://antonz.org/go-concurrency/wait-groups/">Gist of Go: Wait groups</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

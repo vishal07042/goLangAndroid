@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<!-- saved from url=(0045)https://antonz.org/go-concurrency/semaphores/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Gist of Go: Semaphores</title>
+<meta name="description" content="Limiting the concurrency and waiting for the peers."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898059008&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-concurrency%2Fsemaphores%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898059008&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Gist of Go_ Semaphores_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-concurrency/semaphores/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Gist of Go: Semaphores"><meta property="og:description" content="Limiting the concurrency and waiting for the peers."><meta property="og:url" content="https://antonz.org/go-concurrency/semaphores/"><meta property="og:image" content="https://antonz.org/go-concurrency/semaphores/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Gist of Go: Semaphores"><meta name="twitter:description" content="Limiting the concurrency and waiting for the peers."><meta name="twitter:url" content="https://antonz.org/go-concurrency/semaphores/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-concurrency/semaphores/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Gist of Go_ Semaphores_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-concurrency/semaphores/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Gist of Go: Semaphores</h1></header><p><em>This is a chapter from my book on <a href="https://antonz.org/go-concurrency">Go concurrency</a>, which teaches the topic from the ground up through interactive examples.</em></p><p>Having the full power of multi-core hardware is great, but sometimes we prefer to limit concurrency in certain parts of a system. Semaphores are a great way to do this. Let's learn more about them!</p><p><a href="https://antonz.org/go-concurrency/semaphores/#mutex-one-goroutine-at-a-time">Mutex</a> •
+<a href="https://antonz.org/go-concurrency/semaphores/#semaphore--n-goroutines-at-a-time">Semaphore</a> •
+<a href="https://antonz.org/go-concurrency/semaphores/#-implementing-a-semaphore">Implementing a semaphore</a>&nbsp;✎ •
+<a href="https://antonz.org/go-concurrency/semaphores/#rendezvous">Rendezvous</a> •
+<a href="https://antonz.org/go-concurrency/semaphores/#synchronization-barrier">Synchronization barrier</a> •
+<a href="https://antonz.org/go-concurrency/semaphores/#keep-it-up">Keep it up</a></p><h2 id="mutex-one-goroutine-at-a-time">Mutex: one goroutine at a time</h2><p>Let's say our program needs to call a legacy system, represented by the <code>External</code> type. This system is so ancient that it can handle no more than one call at a time. That's why we protect it with a mutex:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// External is a adapter for an external system.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">External</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Call calls the external system.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">e</span> <span class="o">*</span><span class="nx">External</span><span class="p">)</span> <span class="nf">Call</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">e</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">e</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Simulate a remote call.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-external-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now, no matter how many goroutines try to access the external system at the same time, they'll have to take turns:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">nCalls</span> <span class="p">=</span> <span class="mi">12</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ex</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">External</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="k">range</span> <span class="nx">nCalls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">ex</span><span class="p">.</span><span class="nf">Call</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Print</span><span class="p">(</span><span class="s">"."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"\n%d calls took %d ms\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">nCalls</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-external-1" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Suppose the developers of the legacy system made some changes and now they say we can make up to four simultaneous calls. In this case, our approach with the mutex stops working, because it blocks all goroutines except the one that managed to lock the mutex.</p><p>It would be great to use a tool that allows several goroutines to run at the same time, but no more than N. Luckily for us, such a tool already exists.</p><h2 id="semaphore--n-goroutines-at-a-time">Semaphore: ≤ N goroutines at a time</h2><p>So, we want to make sure that no more than 4 goroutines access the external system at the same time. To do this, we'll use a <em>semaphore</em>. You can think of a semaphore as a container with N available slots and two operations: <em>acquire</em> to take a slot and <em>release</em> to free a slot.</p><p>Here are the semaphore rules:</p><ul><li>Calling <code>Acquire</code> takes a free slot.</li><li>If there are no free slots, <code>Acquire</code> blocks the goroutine that called it.</li><li>Calling <code>Release</code> frees up a previously taken slot.</li><li>If there are any goroutines blocked on <code>Acquire</code> when <code>Release</code> is called, one of them will immediately take the freed slot and unblock.</li></ul><p>Let's see how this works. To keep things simple, let's assume that someone has already implemented a <code>Semaphore</code> type for us, and we can just use it.</p><p>We add a semaphore to the external system adapter:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">External</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">sema</span> <span class="nx">Semaphore</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">NewExternal</span><span class="p">(</span><span class="nx">maxConc</span> <span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">External</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// maxConc sets the maximum allowed
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// number of concurrent calls.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">External</span><span class="p">{</span><span class="nf">NewSemaphore</span><span class="p">(</span><span class="nx">maxConc</span><span class="p">)}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-external-21" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We acquire a spot in the semaphore before calling the external system. After the call, we release it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">e</span> <span class="o">*</span><span class="nx">External</span><span class="p">)</span> <span class="nf">Call</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">e</span><span class="p">.</span><span class="nx">sema</span><span class="p">.</span><span class="nf">Acquire</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">e</span><span class="p">.</span><span class="nx">sema</span><span class="p">.</span><span class="nf">Release</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Simulate a remote call.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-external-22" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now let's allow 4 concurrent calls and perform a total of 12 calls. The client code doesn't change:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">nCalls</span> <span class="p">=</span> <span class="mi">12</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">nConc</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">ex</span> <span class="o">:=</span> <span class="nf">NewExternal</span><span class="p">(</span><span class="nx">nConc</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="k">range</span> <span class="nx">nCalls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">ex</span><span class="p">.</span><span class="nf">Call</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Print</span><span class="p">(</span><span class="s">"."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"\n%d calls took %d ms\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">nCalls</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-external-21 s-external-22" template="semaphore.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>12 calls were completed in three steps (each step = 4 concurrent calls). Each step took 10 ms, so the total time was 30 ms.</p><p>You might have noticed a downside to this approach: even though only 4 goroutines (<code>nConc</code>) run concurrently, we actually start all 12 (<code>nCalls</code>) right away. With small numbers, this isn't a big deal, but if <code>nCalls</code> is large, the waiting goroutines will use up memory for no good reason.</p><p>We can modify the program so that there are never more than <code>nConc</code> goroutines at any given time. To do this, we add the <code>Acquire</code> and <code>Release</code> methods directly to <code>External</code> and remove them from <code>Call</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">External</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Semaphore is embedded into External so clients
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// can call Acquire and Release directly on External.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">Semaphore</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">NewExternal</span><span class="p">(</span><span class="nx">maxConc</span> <span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">External</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">External</span><span class="p">{</span><span class="nf">NewSemaphore</span><span class="p">(</span><span class="nx">maxConc</span><span class="p">)}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">e</span> <span class="o">*</span><span class="nx">External</span><span class="p">)</span> <span class="nf">Call</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Simulate a remote call.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-external-23" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The client calls <code>Acquire</code> before starting each new goroutine in the loop, and calls <code>Release</code> when it's finished:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">nCalls</span> <span class="p">=</span> <span class="mi">12</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">nConc</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">ex</span> <span class="o">:=</span> <span class="nf">NewExternal</span><span class="p">(</span><span class="nx">nConc</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="k">range</span> <span class="nx">nCalls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">ex</span><span class="p">.</span><span class="nf">Acquire</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">defer</span> <span class="nx">ex</span><span class="p">.</span><span class="nf">Release</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">ex</span><span class="p">.</span><span class="nf">Call</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Print</span><span class="p">(</span><span class="s">"."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"\n%d calls took %d ms\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">nCalls</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-external-23" template="semaphore.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now there are never more than 4 goroutines at any time (not counting the main goroutine, of course).</p><p>In summary, the semaphore helped us solve the problem of limited concurrency:</p><ul><li>goroutines are allowed to run concurrently,</li><li>but no more than N at the same time.</li></ul><p>Unfortunately, the standard library doesn't include a <code>Semaphore</code> type. So in the next step, we'll implement it ourselves!</p><blockquote><p>There is a semaphore available in the <code>golang.org/x/sync/semaphore</code> package. But for simple cases like ours, it's perfectly fine to use your own implementation.</p></blockquote><h2 id="-implementing-a-semaphore">✎ Implementing a semaphore</h2><p><em>The ✎ symbol indicates exercises. They're usually only available in the paid version of the book, but this one is an exception.</em></p><p>Here's a <code>Semaphore</code> type that I'm not really proud of:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// A synchronization semaphore.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Semaphore</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">n</span>   <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">val</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewSemaphore creates a new semaphore with the given capacity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewSemaphore</span><span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">Semaphore</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">Semaphore</span><span class="p">{</span><span class="nx">n</span><span class="p">:</span> <span class="nx">n</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Acquire takes a spot in the semaphore if one is available.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Otherwise, it blocks the calling goroutine.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Semaphore</span><span class="p">)</span> <span class="nf">Acquire</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">s</span><span class="p">.</span><span class="nx">val</span> <span class="p">&lt;</span> <span class="nx">s</span><span class="p">.</span><span class="nx">n</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">s</span><span class="p">.</span><span class="nx">val</span> <span class="o">+=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">s</span><span class="p">.</span><span class="nx">val</span> <span class="o">&gt;=</span> <span class="nx">s</span><span class="p">.</span><span class="nx">n</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Release frees up a spot in the semaphore and unblocks
+</span></span></span><span class="line"><span class="cl"><span class="c1">// one of the blocked goroutines (if there are any).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Semaphore</span><span class="p">)</span> <span class="nf">Release</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">s</span><span class="p">.</span><span class="nx">val</span> <span class="o">-=</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>There are a few problems with it:</p><ul><li>There's a data race when changing the <code>val</code> counter.</li><li>The waiting in <code>Acquire</code> is done with an infinite loop (busy-waiting).</li><li>The semaphore doesn't work 😁</li></ul><p>Create your own <code>Semaphore</code> that doesn't have these issues.</p><details><summary>Hint</summary><p>Use a channel. The solution will be very straightforward.</p></details><p>Submit only the code fragment marked with "solution start" and "solution end" comments. The full source code is available via the "Playground" link below.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// solution start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// A synchronization semaphore.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Semaphore</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewSemaphore creates a new semaphore with the given capacity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewSemaphore</span><span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">Semaphore</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Acquire takes a spot in the semaphore if one is available.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Otherwise, it blocks the calling goroutine.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Semaphore</span><span class="p">)</span> <span class="nf">Acquire</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Release frees up a spot in the semaphore and unblocks
+</span></span></span><span class="line"><span class="cl"><span class="c1">// one of the blocked goroutines (if there are any).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Semaphore</span><span class="p">)</span> <span class="nf">Release</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// solution end
+</span></span></span></code></pre></div><codapi-snippet id="ex01" sandbox="go" editor="basic" template="ex01/main.go" actions="⛶_Playground:@playground ↻_Reset:@reset ☉_Toggle_solution:@solution" data-playground="https://go.dev/play/p/yNYualRmbsJ?v=gotip" state="unknown" initialcode="// solution start
+
+// A synchronization semaphore.
+type Semaphore
+
+// NewSemaphore creates a new semaphore with the given capacity.
+func NewSemaphore(n int) *Semaphore {
+    // ...
+}
+
+// Acquire takes a spot in the semaphore if one is available.
+// Otherwise, it blocks the calling goroutine.
+func (s *Semaphore) Acquire() {
+    // ...
+}
+
+// Release frees up a spot in the semaphore and unblocks
+// one of the blocked goroutines (if there are any).
+func (s *Semaphore) Release() {
+    // ...
+}
+
+// solution end">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<a href="https://antonz.org/go-concurrency/semaphores/#playground">⛶ Playground</a><a href="https://antonz.org/go-concurrency/semaphores/#reset">↻ Reset</a><a href="https://antonz.org/go-concurrency/semaphores/#solution">☉ Toggle solution</a><codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div id="ex01-solution" class="boxed" hidden=""><p><strong>✓ Implementing a semaphore</strong></p><p>A buffered channel is basically a ready-made semaphore:</p><ul><li>Sending to the channel is equivalent to the acquire operation.</li><li>Receiving from the channel is equivalent to the release operation.</li></ul><p>Given this, we use the channel as the base type:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// A synchronization semaphore.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Semaphore</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewSemaphore creates a new semaphore with the given capacity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewSemaphore</span><span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">)</span> <span class="nx">Semaphore</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">n</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">panic</span><span class="p">(</span><span class="s">"expected n &gt; 0"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">make</span><span class="p">(</span><span class="nx">Semaphore</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Acquire sends a token to the channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Acquire takes a spot in the semaphore.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="nx">Semaphore</span><span class="p">)</span> <span class="nf">Acquire</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">s</span> <span class="o">&lt;-</span> <span class="kd">struct</span><span class="p">{}{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Release takes a token from the channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Release frees up a spot in the semaphore.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="nx">Semaphore</span><span class="p">)</span> <span class="nf">Release</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">s</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">panic</span><span class="p">(</span><span class="s">"released more than acquired"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></div><div class="boxed"><p><strong>✎ Exercise: Implementing TryAcquire</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="rendezvous">Rendezvous</h2><p>Imagine you and your friend agreed to meet at a certain place before going to a cafe together. You arrive at the meeting spot, but your friend isn't there yet. As planned, you don't go anywhere; you just wait for them, and then you both proceed to drink tea (or whatever you planned) together. If your friend had arrived first, they would have waited for you the same way before heading to the cafe.</p><p>This kind of logic in concurrent programs is called a <em>rendezvous</em>:</p><ul><li>There are two goroutines — G1 and G2 — and each one can signal that it's ready.</li><li>If G1 signals but G2 hasn't yet, G1 blocks and waits.</li><li>If G2 signals but G1 hasn't yet, G2 blocks and waits.</li><li>When both have signaled, they both unblock and continue running.</li></ul><p>Let's say there are two goroutines, and each one performs two steps. After the first step, each goroutine wants to wait for the other. Here's what their execution looks like without a rendezvous:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: started"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: reached the sync point"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Sync point: how do I wait for the second goroutine?
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: going further"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">20</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">20</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: started"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">20</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: reached the sync point"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Sync point: how do I wait for the first goroutine?
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: going further"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>As you can see, the second goroutine is just getting started, while the first one is already finished. No one is waiting for anyone else.</p><p>Let's set up a rendezvous for them:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">ready1</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span></span><span class="line"><span class="cl"><span class="nx">ready2</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: started"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: reached the sync point"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Sync point.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nb">close</span><span class="p">(</span><span class="nx">ready1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">ready2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: going further"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">20</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"1: done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">20</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: started"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">20</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: reached the sync point"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Sync point.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nb">close</span><span class="p">(</span><span class="nx">ready2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">ready1</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: going further"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"2: done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now everything works fine: the goroutines waited for each other at the sync point before moving on.</p><p>Here's how it works:</p><ul><li>G1 closes its own channel when it's ready and then blocks on the other channel. G2 does the same thing.</li><li>When G1's channel is closed, it unblocks G2, and when G2's channel is closed, it unblocks G1.</li><li>As a result, both goroutines are unblocked at the same time.</li></ul><p>Here, we close the channel to signal an event. We've done this before:</p><ul><li>With a done channel in the <a href="https://antonz.org/go-concurrency/channels/">Channels</a> chapter (the goroutine signals the caller that the work is finished).</li><li>With a cancel channel in the <a href="https://antonz.org/go-concurrency/pipelines/">Pipelines</a> chapter (the caller signals the goroutine to stop working).</li></ul><div class="boxed"><p><strong>Caution: Using Print for debugging</strong></p><p>Since printing uses a single output device (stdout), goroutines that print concurrently have to synchronize access to it. So, using print statements adds a synchronization point to your program. This can cause unexpected results that are different from what actually happens in production (where there is no printing).</p><p>In the book, I use print statements only because it's much harder to understand the material without them.</p></div><div class="boxed"><p><strong>✎ Exercise: Implementing a rendezvous</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="synchronization-barrier">Synchronization barrier</h2><p>Imagine you walk up to a crosswalk with a traffic light and see a button that's supposed to turn the light green. You press the button, but nothing happens. Another person comes up behind you and presses the button too, but still nothing changes. Two more people arrive, both press the button, but the light stays red. Now the four of you are just standing there, not sure what to do. Finally, a fifth person comes, presses the button, and the light turns green. All five of you cross the street together.</p><p>This kind of logic in concurrent programs is called a <em>synchronization barrier</em>:</p><ul><li>The barrier has a counter (starting at 0) and a threshold N.</li><li>Each goroutine that reaches the barrier increases the counter by 1.</li><li>The barrier blocks any goroutine that reaches it.</li><li>Once the counter reaches N, the barrier unblocks all waiting goroutines.</li></ul><p>Let's say there are N goroutines. Each one first does a preparation step, then the main step. Here's what their execution looks like without a barrier:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">const</span> <span class="nx">nWorkers</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">nWorkers</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Simulate the preparation step.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">((</span><span class="nx">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="mi">10</span><span class="p">)</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"ready to go after %d ms\n"</span><span class="p">,</span> <span class="nx">dur</span><span class="p">.</span><span class="nf">Milliseconds</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1">// Simulate the main step.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"go!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"all done in %d ms\n"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">())</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="barrier.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Each goroutine proceeds to the main step as soon as it's ready, without waiting for the others.</p><p>Let's say we want the goroutines to wait for each other before moving on to the main step. To do this, we just need to add a barrier after the preparation step:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">const</span> <span class="nx">nWorkers</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl"><span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl"><span class="nx">b</span> <span class="o">:=</span> <span class="nf">NewBarrier</span><span class="p">(</span><span class="nx">nWorkers</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">nWorkers</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Simulate the preparation step.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">((</span><span class="nx">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="mi">10</span><span class="p">)</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"ready to go after %d ms\n"</span><span class="p">,</span> <span class="nx">dur</span><span class="p">.</span><span class="nf">Milliseconds</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1">// Wait for all goroutines to reach the barrier.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">b</span><span class="p">.</span><span class="nf">Touch</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">        <span class="c1">// Simulate the main step.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"go!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"all done in %d ms\n"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">())</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="barrier.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/semaphores/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/semaphores/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now the faster goroutines waited at the barrier for the slower ones, and only after that did they all move on to the main step together.</p><p>Here are some examples of when a synchronization barrier can be useful:</p><ul><li><em>Parallel computing</em>. If you're sorting in parallel and then merging the results, the sorting steps must finish before the merging starts. If you merge too soon, you'll get the wrong results.</li><li><em>Multiplayer applications</em>. If a duel in the game involves N players, all resources for those players need to be fully prepared before the duel begins. Otherwise, some players might be at a disadvantage.</li><li><em>Distributed systems</em>. To create a backup, you need to wait until all nodes in the system reach a consistent state (a checkpoint). Otherwise, the backup's integrity could be compromised.</li></ul><p>The standard library doesn't have a barrier, so now is a great time to make one yourself!</p><div class="boxed"><p><strong>✎ Exercise: Implementing a barrier</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="keep-it-up">Keep it up</h2><p>You've learned the classic synchronization tools — mutexes, semaphores, rendezvous, and barriers. Be careful when using them. Try to avoid complicated setups, and always write tests for tricky concurrent situations.</p><p>In the next chapter, we'll talk about <a href="https://antonz.org/go-concurrency/signaling/">signaling</a>.</p><p><a class="button" href="https://antonz.gumroad.com/l/go-concurrency">Buy for $25
+</a>&nbsp;
+or <a href="https://antonz.org/go-concurrency/">read online</a></p><script defer="" src="./Gist of Go_ Semaphores_files/snippet.js.download"></script><script defer="" src="./Gist of Go_ Semaphores_files/exercise.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-07-01 15:30:00 +0000 UTC">01 Jul, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-1-25/">Go 1.25 interactive tour</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/be/">Concise test assertions with Be</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-1-25/">Go 1.25 interactive tour</a></p><p><a href="https://antonz.org/go-json-v2/">JSON evolution in Go: from v1 to v2</a></p><p><a href="https://antonz.org/go-concurrency/race-conditions/">Gist of Go: Race conditions</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

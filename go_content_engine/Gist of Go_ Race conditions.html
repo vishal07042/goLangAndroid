@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<!-- saved from url=(0050)https://antonz.org/go-concurrency/race-conditions/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Gist of Go: Race conditions</title>
+<meta name="description" content="Keep the system state correct by any means necessary."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898023843&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-concurrency%2Frace-conditions%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898023843&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Gist of Go_ Race conditions_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-concurrency/race-conditions/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Gist of Go: Race conditions"><meta property="og:description" content="Keep the system state correct by any means necessary."><meta property="og:url" content="https://antonz.org/go-concurrency/race-conditions/"><meta property="og:image" content="https://antonz.org/go-concurrency/race-conditions/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Gist of Go: Race conditions"><meta name="twitter:description" content="Keep the system state correct by any means necessary."><meta name="twitter:url" content="https://antonz.org/go-concurrency/race-conditions/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-concurrency/race-conditions/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Gist of Go_ Race conditions_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-concurrency/race-conditions/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Gist of Go: Race conditions</h1></header><p><em>This is a chapter from my book on <a href="https://antonz.org/go-concurrency">Go concurrency</a>, which teaches the topic from the ground up through interactive examples.</em></p><p>Preventing data races with mutexes may sound easy, but dealing with race conditions is a whole other matter. Let's learn how to handle these beasts!</p><p><a href="https://antonz.org/go-concurrency/race-conditions/#race-condition">Race&nbsp;condition</a> •
+<a href="https://antonz.org/go-concurrency/race-conditions/#compare-and-set">Compare-and-set</a> •
+<a href="https://antonz.org/go-concurrency/race-conditions/#idempotence-and-atomicity">Idempotence&nbsp;and&nbsp;atomicity</a> •
+<a href="https://antonz.org/go-concurrency/race-conditions/#locker">Locker</a> •
+<a href="https://antonz.org/go-concurrency/race-conditions/#trylock">TryLock</a> •
+<a href="https://antonz.org/go-concurrency/race-conditions/#shared-nothing">Shared&nbsp;nothing</a> •
+<a href="https://antonz.org/go-concurrency/race-conditions/#keep-it-up">Keep&nbsp;it&nbsp;up</a></p><h2 id="race-condition">Race condition</h2><p>Let's say we're keeping track of the money in users' accounts:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Accounts - money in users' accounts.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Accounts</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">bal</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">mu</span>  <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewAccounts creates a new set of accounts.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewAccounts</span><span class="p">(</span><span class="nx">bal</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">Accounts</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">Accounts</span><span class="p">{</span><span class="nx">bal</span><span class="p">:</span> <span class="nx">maps</span><span class="p">.</span><span class="nf">Clone</span><span class="p">(</span><span class="nx">bal</span><span class="p">)}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-race-cond-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We can check the balance by username or change the balance:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Get returns the user's balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">a</span> <span class="o">*</span><span class="nx">Accounts</span><span class="p">)</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">name</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Set changes the user's balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">a</span> <span class="o">*</span><span class="nx">Accounts</span><span class="p">)</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">name</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">amount</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span> <span class="p">=</span> <span class="nx">amount</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-race-cond-2" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Account operations — <code>Get</code> and <code>Set</code> — are concurrent-safe, thanks to the mutex.</p><p>There's also a store that sells Lego sets:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// A Lego set.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">LegoSet</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span>  <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">price</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-race-cond-3" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Alice has 50 coins in her account. She wants to buy two sets: "Castle" for 40 coins and "Plants" for 20 coins:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span> <span class="o">:=</span> <span class="nf">NewAccounts</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"alice"</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">castle</span> <span class="o">:=</span> <span class="nx">LegoSet</span><span class="p">{</span><span class="nx">name</span><span class="p">:</span> <span class="s">"Castle"</span><span class="p">,</span> <span class="nx">price</span><span class="p">:</span> <span class="mi">40</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">plants</span> <span class="o">:=</span> <span class="nx">LegoSet</span><span class="p">{</span><span class="nx">name</span><span class="p">:</span> <span class="s">"Plants"</span><span class="p">,</span> <span class="nx">price</span><span class="p">:</span> <span class="mi">20</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Alice buys a castle.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">castle</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">castle</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the castle"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Alice buys plants.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the plants"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice's balance:"</span><span class="p">,</span> <span class="nx">balance</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-race-cond-1 s-race-cond-2 s-race-cond-3" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>What a twist! Not only did Alice buy both sets for a total of 60 coins (even though she only had 50 coins), but she also ended up with 30 coins left! Great deal for Alice, not so great for us.</p><p>The problem is that checking and updating the balance is not an atomic operation:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// body of the second goroutine
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>             <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>             <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>  <span class="c1">// (3)
+</span></span></span></code></pre></div><p>At point ➊, we see a balance of 50 coins (the first goroutine hasn't done anything yet), so the check at ➋ passes. By point ➌, Alice has already bought the castle (the first goroutine has finished), so her actual balance is 10 coins. But we don't know this and still think her balance is 50 coins. So at point ➌, Alice buys the plants for 20 coins, and the balance becomes 30 coins (the "assumed" balance of 50 coins minus the 20 coins for the plants = 30 coins).</p><p>Individual actions on the balance are safe (there's no <em>data race</em>). However, balance reads/writes from different goroutines can get "mixed up", leading to an incorrect final balance. This situation is called a <em>race condition</em>.</p><p>You can't fully eliminate uncertainty in a concurrent environment. Events will happen in an unpredictable order — that's just how concurrency works. However, you can protect the system's state — in our case, the purchased sets and balance — so it stays correct no matter what order things happen in.</p><p>Let's check and update the balance in one atomic operation, protecting the entire purchase with a mutex. This way, purchases are processed strictly sequentially:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Shared mutex.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">var</span> <span class="nx">mu</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys a castle.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Protect the entire purchase with a mutex.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">castle</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">castle</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the castle"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys plants.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Protect the entire purchase with a mutex.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the plants"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="accounts-mutex.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>One of the goroutines will run first, lock the mutex, check and update the balance, then unlock the mutex. Only after that will the second goroutine be able to lock the mutex and make its purchase.</p><p>We still can't be sure which purchase will happen — it depends on the order the goroutines run. But now we are certain that Alice won't buy more than she's supposed to, and the final balance will be correct:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Alice bought the castle
+</span></span><span class="line"><span class="cl">Alice's balance: 10
+</span></span></code></pre></div><p>Or:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Alice bought the plants
+</span></span><span class="line"><span class="cl">Alice's balance: 30
+</span></span></code></pre></div><p>To reiterate:</p><ul><li>A <em>data race</em> happens when multiple goroutines access shared data, and at least one of them modifies it. We need to protect the data from this kind of concurrent access.</li><li>A <em>race condition</em> happens when an unpredictable order of operations leads to an incorrect system state. In a concurrent environment, we can't control the exact order things happen. Still, we need to make sure that no matter the order, the system always ends up in the correct state.</li></ul><p>Go's race detector can find data races, but it doesn't catch race conditions. It's always up to the programmer to prevent race conditions.</p><h2 id="compare-and-set">Compare-and-set</h2><p>Let's go back to the situation with the race condition before we added the mutex:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Alice's balance = 50 coins.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Castle price = 40 coins.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Plants price = 20 coins.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys a castle.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">castle</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">castle</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the castle"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys plants.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the plants"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Alice bought the castle
+</span></span><span class="line"><span class="cl">Alice bought the plants
+</span></span><span class="line"><span class="cl">Alice's balance: 30
+</span></span></code></pre></div><p>As we discussed, the reason for the incorrect final state is that buying a set (checking and updating the balance) is not an atomic operation:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// body of the second goroutine
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>             <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>             <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">acc</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span>  <span class="c1">// (3)
+</span></span></span></code></pre></div><p>At point ➊, we see a balance of 50 coins, so the check at ➋ passes. By point ➌, Alice has already bought the castle, so her actual balance is 10 coins. But we don't know this and still think her balance is 50 coins. So at point ➌, Alice buys the plants for 20 coins, and the balance becomes 30 coins (the "assumed" balance of 50 coins minus the 20 coins for the plants = 30 coins).</p><p>To solve the problem, we can protect the entire purchase with a mutex, just like we did before. But there's another way to handle it.</p><p>We can keep two separate operations (checking and updating the balance), but instead of a regular update (set), use an atomic <em>compare-and-set</em> operation:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Get returns the user's balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">a</span> <span class="o">*</span><span class="nx">Accounts</span><span class="p">)</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">name</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// CompareAndSet changes the user's balance to new
+</span></span></span><span class="line"><span class="cl"><span class="c1">// if the current value equals old. Returns false otherwise.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">a</span> <span class="o">*</span><span class="nx">Accounts</span><span class="p">)</span> <span class="nf">CompareAndSet</span><span class="p">(</span><span class="nx">name</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">old</span><span class="p">,</span> <span class="nx">new</span> <span class="kt">int</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span> <span class="o">!=</span> <span class="nx">old</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span> <span class="p">=</span> <span class="nx">new</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>CompareAndSet</code> first checks if the balance has changed compared to the old value provided by the caller (the "assumed" balance). If the balance has changed (the assumed balance doesn't match the actual balance), it doesn't set the new value and returns <code>false</code>. If the balance hasn't changed (the assumed balance matches the actual balance), it sets the new value and returns <code>true</code>.</p><p>Now we can safely sell Lego:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Alice buys a castle.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">castle</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">CompareAndSet</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">castle</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the castle"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys plants.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">CompareAndSet</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the plants"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="accounts-cas.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We no longer use a mutex to protect the entire purchase. Individual operations from different goroutines can get mixed up, but using compare-and-set instead of a regular update protects us from the race condition. If the actual account state doesn't match what we expect (because another goroutine made a change), the update won't happen.</p><div class="boxed"><p><strong>CAS with retry</strong></p><p>In practice, a failed compare-and-set is often followed by a retry. In our example, we would re-read the balance with <code>acc.Get</code> and, if there is still enough money, retried the purchase with <code>acc.CompareAndSet</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Alice buys plants (with retries).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span> <span class="c1">// Start of retry loop.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">balance</span> <span class="p">&lt;</span> <span class="nx">plants</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="c1">// Not enough money, exit loop.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Attempt the purchase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">if</span> <span class="nx">acc</span><span class="p">.</span><span class="nf">CompareAndSet</span><span class="p">(</span><span class="s">"alice"</span><span class="p">,</span> <span class="nx">balance</span><span class="p">,</span> <span class="nx">balance</span><span class="o">-</span><span class="nx">plants</span><span class="p">.</span><span class="nx">price</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Alice bought the plants"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="c1">// Success, exit loop.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Wait a bit before trying again.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// It's also a good idea to limit the number of retries
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// (not shown here for simplicity) - you don't want
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// the program to get stuck in an infinite loop.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><p>This approach helps the program handle occasional goroutine conflicts over a shared resource.</p></div><p>Compare-and-set is often used in concurrent programming. It comes in different flavors, such as:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// CompareAndSet changes the value to new if the current value equals old.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Returns true if the value was changed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">CompareAndSet</span><span class="p">(</span><span class="nx">old</span><span class="p">,</span> <span class="nx">new</span> <span class="nx">any</span><span class="p">)</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// CompareAndSwap changes the value to new if the current value equals old.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Returns the old value.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">CompareAndSwap</span><span class="p">(</span><span class="nx">old</span><span class="p">,</span> <span class="nx">new</span> <span class="nx">any</span><span class="p">)</span> <span class="nx">any</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// CompareAndDelete deletes the value if the current value equals old.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Returns true if the value was deleted.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nf">CompareAndDelete</span><span class="p">(</span><span class="nx">old</span> <span class="nx">any</span><span class="p">)</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// etc
+</span></span></span></code></pre></div><p>The idea is always the same:</p><ul><li>Check if the assumed (old) state matches reality.</li><li>If it does, change the state to new.</li><li>If not, do nothing.</li></ul><blockquote><p>Go's standard library provides compare-and-swap operations for basic types like <code>bool</code> and <code>int64</code>. We'll cover these in another chapter.</p></blockquote><p>If compare-and-set doesn't work for your situation, you can always use a regular shared mutex instead. It can protect any sequence of operations, no matter how complex.</p><div class="boxed"><p><strong>✎ Exercise: Concurrent&nbsp;map + 1 more</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="idempotence-and-atomicity">Idempotence and atomicity</h2><p>Idempotence means that calling an operation on an object multiple times doesn't cause any changes or errors after the first time.</p><p>Let's say we have a resource that need to be released after use:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// resource that needs to be freed after use.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">resource</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// free releases the resource.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Panics if the resource has already been released.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">r</span> <span class="o">*</span><span class="nx">resource</span><span class="p">)</span> <span class="nf">free</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>And there's a worker that frees up resources when closed:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Worker does some work and
+</span></span></span><span class="line"><span class="cl"><span class="c1">// frees resources when closed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Worker</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">res</span> <span class="nx">resource</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Work performs some work.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">Worker</span><span class="p">)</span> <span class="nf">Work</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Close frees resources
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and shuts down the worker.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">Worker</span><span class="p">)</span> <span class="nf">Close</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nx">res</span><span class="p">.</span><span class="nf">free</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-worker" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Everything works fine until we call <code>Close</code> twice:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">Worker</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nf">Work</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"worker closed"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-worker" template="resource.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Let's see how to make <code>Close</code> idempotent so we can safely release the resources.</p><h3 id="boolean-flag">Boolean flag</h3><p>Let's add a <code>closed</code> flag to the worker and check it in the <code>Close</code> method:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Worker does some work and
+</span></span></span><span class="line"><span class="cl"><span class="c1">// frees resources when closed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Worker</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">res</span>    <span class="nx">resource</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">closed</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Close frees resources
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and shuts down the worker.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">Worker</span><span class="p">)</span> <span class="nf">Close</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Ignore repeated calls.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">w</span><span class="p">.</span><span class="nx">closed</span> <span class="p">{</span>    <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nx">res</span><span class="p">.</span><span class="nf">free</span><span class="p">()</span>     <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">w</span><span class="p">.</span><span class="nx">closed</span> <span class="p">=</span> <span class="kc">true</span>  <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-worker-flag" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now, calling <code>Close</code> multiple times works fine:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">Worker</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"worker closed"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-worker-flag" template="resource.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>But what happens if we call <code>Close</code> simultaneously from different goroutines?</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">Worker</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">Close</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">Close</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"worker closed"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="c1">// panic: resource is already freed
+</span></span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-worker-flag" template="resource.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><blockquote><p>You won't see panic here often. But it's still there, lurking in the dark.</p></blockquote><p>Panic! You already know why this happens — the check for <code>w.closed</code> ➊ and the following resource cleanup ➋ ➌ aren't atomic. Since goroutines run concurrently, they both pass the if statement and call <code>w.res.free()</code>. Then, one of the goroutines panics.</p><p>We need a structure that ensures atomicity and idempotence in a concurrent environment.</p><h3 id="select">select</h3><p>Why don't we use a <code>closed</code> channel instead of a boolean flag, and use <code>select</code> to close the channel only once?</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Worker does some work and
+</span></span></span><span class="line"><span class="cl"><span class="c1">// frees resources when closed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Worker</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">res</span>    <span class="nx">resource</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">closed</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewWorker creates a new worker.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// We need an explicit NewWorker constructor instead of
+</span></span></span><span class="line"><span class="cl"><span class="c1">// new(Worker), because the default value for a channel
+</span></span></span><span class="line"><span class="cl"><span class="c1">// is nil, which doesn't work for our needs.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewWorker</span><span class="p">()</span> <span class="o">*</span><span class="nx">Worker</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">Worker</span><span class="p">{</span><span class="nx">closed</span><span class="p">:</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Close frees resources
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and shuts down the worker.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">Worker</span><span class="p">)</span> <span class="nf">Close</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">w</span><span class="p">.</span><span class="nx">closed</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Ignore repeated calls.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">w</span><span class="p">.</span><span class="nx">res</span><span class="p">.</span><span class="nf">free</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">close</span><span class="p">(</span><span class="nx">w</span><span class="p">.</span><span class="nx">closed</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="worker-select.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We call <code>Close</code> from two goroutines and get "worker closed". Everything works fine. Then we deploy this code to production, and a week later we get a bug report saying the app sometimes crashes with the "resource is already freed" panic. What's wrong?</p><p>The thing is, select <em>does not</em> protect against freeing resources more than once. As we know, select is safe for concurrent use. So, if two goroutines call <code>Close</code> at the same time, they both enter the select and have to pick a case. Since the <code>closed</code> channel isn't closed yet, both goroutines choose the default case. Both call <code>w.res.free()</code>, and one of them panics.</p><p>The chances of this happening are pretty low. You could call <code>Close</code> 999 times without any issues, but on the thousandth try, the stars will align just right, both goroutines will hit the default case, and you will get a panic.</p><p>It's especially frustrating that the race detector doesn't always catch this kind of issues. In the example above, the race detector might not find anything (depends on the Go version), especially if you comment out <code>w.res.free()</code>. But the race condition is still there, and closing the channel more than once will eventually cause a panic.</p><p>Select is not atomic. Choosing a select case and running its body are separate actions, not a single atomic operation. So, if the code inside the case changes shared data, select can cause a race condition. It's important to keep this in mind.</p><h3 id="mutex">Mutex</h3><p>Let's go back to the <code>closed</code> boolean flag, but this time protect it with a mutex:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Worker does some work and
+</span></span></span><span class="line"><span class="cl"><span class="c1">// frees resources when closed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Worker</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">res</span>    <span class="nx">resource</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">mu</span>     <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">closed</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Close frees resources
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and shuts down the worker.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">w</span> <span class="o">*</span><span class="nx">Worker</span><span class="p">)</span> <span class="nf">Close</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Make the method atomic.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">w</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">w</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Ignore repeated calls.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">w</span><span class="p">.</span><span class="nx">closed</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nx">res</span><span class="p">.</span><span class="nf">free</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">w</span><span class="p">.</span><span class="nx">closed</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="worker-mutex.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The mutex stays locked for the entire scope of the <code>Close</code> method. This ensures that no matter how many goroutines call <code>Close</code> simultaneously, only one can execute its body at a time.</p><p>Checking the <code>closed</code> flag, freeing resources, and updating the <code>closed</code> state all happen as one atomic operation. This makes <code>Close</code> idempotent, so you won't get any panics when releasing resources.</p><p>A mutex (or something similar) is the only way to make sure a complex operation is atomic in a concurrent environment. Do not rely on select in these situations.</p><blockquote><p>Speaking of "something similar", for this specific use case — making sure something happens exactly once — Go's standard library provides a handy <code>sync.Once</code> type. We'll cover it in another chapter.</p></blockquote><div class="boxed"><p><strong>✎ Exercise: Spot&nbsp;the&nbsp;race</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="locker">Locker</h2><p>Here are the mutex methods we learned about in the last chapter:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Mutex</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// internal state
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">m</span> <span class="o">*</span><span class="nx">Mutex</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">m</span> <span class="o">*</span><span class="nx">Mutex</span><span class="p">)</span> <span class="nf">Unlock</span><span class="p">()</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">RWMutex</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// internal state
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">rw</span> <span class="o">*</span><span class="nx">RWMutex</span><span class="p">)</span> <span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">rw</span> <span class="o">*</span><span class="nx">RWMutex</span><span class="p">)</span> <span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">rw</span> <span class="o">*</span><span class="nx">RWMutex</span><span class="p">)</span> <span class="nf">RLock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">rw</span> <span class="o">*</span><span class="nx">RWMutex</span><span class="p">)</span> <span class="nf">RUnlock</span><span class="p">()</span>
+</span></span></code></pre></div><p>As you can see, both types have the same <code>Lock</code> and <code>Unlock</code> methods. Go's standard library provides a common interface for them:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// A Locker represents an object that
+</span></span></span><span class="line"><span class="cl"><span class="c1">// can be locked and unlocked.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Locker</span> <span class="kd">interface</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>If the "locking mechanism" is defined by the client, and your code just needs to lock or unlock access to shared data, use <code>Locker</code> instead of a specific type:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// ArrayList is a concurrent-safe dynamic array.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">ArrayList</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">vals</span> <span class="p">[]</span><span class="nx">any</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Locker</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewArrayList creates a new empty array.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewArrayList</span><span class="p">(</span><span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Locker</span><span class="p">)</span> <span class="o">*</span><span class="nx">ArrayList</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">lock</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">panic</span><span class="p">(</span><span class="s">"NewArrayList: lock cannot be nil"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">ArrayList</span><span class="p">{</span><span class="nx">vals</span><span class="p">:</span> <span class="p">[]</span><span class="nx">any</span><span class="p">{},</span> <span class="nx">lock</span><span class="p">:</span> <span class="nx">lock</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Len returns the length of the array.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">al</span> <span class="o">*</span><span class="nx">ArrayList</span><span class="p">)</span> <span class="nf">Len</span><span class="p">()</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">al</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">al</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="nx">al</span><span class="p">.</span><span class="nx">vals</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Append adds an element to the array.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">al</span> <span class="o">*</span><span class="nx">ArrayList</span><span class="p">)</span> <span class="nf">Append</span><span class="p">(</span><span class="nx">val</span> <span class="nx">any</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">al</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">al</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">al</span><span class="p">.</span><span class="nx">vals</span> <span class="p">=</span> <span class="nb">append</span><span class="p">(</span><span class="nx">al</span><span class="p">.</span><span class="nx">vals</span><span class="p">,</span> <span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-array-list" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>This way, the client can use <code>Mutex</code>, <code>RWMutex</code>, or any other implementation they prefer:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">list</span> <span class="o">:=</span> <span class="nf">NewArrayList</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">lock</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Add 400 elements to the array using 4 goroutines.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="k">range</span> <span class="mi">4</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">for</span> <span class="k">range</span> <span class="mi">100</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">list</span><span class="p">.</span><span class="nf">Append</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">IntN</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"list length ="</span><span class="p">,</span> <span class="nx">list</span><span class="p">.</span><span class="nf">Len</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-array-list" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>By using <code>sync.Locker</code>, you can build components that don't depend on a specific lock implementation. This lets the client decide which lock to use. While you probably won't need this very often, it's a useful feature to be aware of.</p><h2 id="trylock">TryLock</h2><p>Let's say our program needs to call a legacy system, represented by the <code>External</code> type. This system is so ancient that it can handle no more than one call at a time. That's why we protect it with a mutex:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// External is a client for an external system.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">External</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Call calls the external system.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">e</span> <span class="o">*</span><span class="nx">External</span><span class="p">)</span> <span class="nf">Call</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">e</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">e</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Simulate a remote call.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-external-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now, no matter how many goroutines try to access the external system at the same time, they'll have to take turns:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">nCalls</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ex</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">External</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="k">range</span> <span class="nx">nCalls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">ex</span><span class="p">.</span><span class="nf">Call</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"success"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"%d calls took %d ms\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">nCalls</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-external-1" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Everything looks good on paper. But in reality, if there are a lot of these goroutines, the external system will be constantly busy handling all these sequential calls. This could end up being too much for it. So, let's change the approach:</p><ul><li>If a goroutine needs to call an external system,</li><li>and that system is already busy,</li><li>then the goroutine shouldn't wait,</li><li>but should immediately return an error.</li></ul><p>We can use the <code>TryLock</code> method of a mutex to implement this logic:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// External is a client for an external system.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">External</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Call calls the external system.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">e</span> <span class="o">*</span><span class="nx">External</span><span class="p">)</span> <span class="nf">Call</span><span class="p">()</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="p">!</span><span class="nx">e</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">TryLock</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">"busy"</span><span class="p">)</span>  <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">defer</span> <span class="nx">e</span><span class="p">.</span><span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Simulate a remote call.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-external-2" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>TryLock</code> tries to lock the mutex, just like a regular <code>Lock</code>. But if it can't, it returns <code>false</code> right away instead of blocking the goroutine. This way, we can immediately return an error at ➊ instead of waiting for the system to become available.</p><p>Now, out of four simultaneous calls, only one will go through. The others will get a "busy" error:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kd">const</span> <span class="nx">nCalls</span> <span class="p">=</span> <span class="mi">4</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ex</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">External</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="k">range</span> <span class="nx">nCalls</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">err</span> <span class="o">:=</span> <span class="nx">ex</span><span class="p">.</span><span class="nf">Call</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">			<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">				<span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"success"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">			<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="p">})</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">		<span class="s">"%d calls took %d ms\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">nCalls</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">).</span><span class="nf">Milliseconds</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">	<span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-external-2" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>According to the standard library docs, <code>TryLock</code> is rarely needed. In fact, using it might mean there's a problem with your program's design. For example, if you're calling <code>TryLock</code> in a busy-wait loop ("keep trying until the resource is free") — that's usually a bad sign:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">mutex</span><span class="p">.</span><span class="nf">TryLock</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Use the shared resource.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">mutex</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>This code will keep one CPU core at 100% usage until the mutex is unlocked. It's much better to use a regular <code>Lock</code> so the scheduler can take the blocked goroutine off the CPU.</p><div class="boxed"><p><strong>✎ Exercise: Rate&nbsp;limiter</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="shared-nothing">Shared nothing</h2><p>Let's go back one last time to Alice and the Lego sets we started the chapter with.</p><p>We manage user accounts:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Accounts - money in users' accounts.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Accounts</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">bal</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">mu</span>  <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewAccounts creates a new set of accounts.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">NewAccounts</span><span class="p">(</span><span class="nx">bal</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">Accounts</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="o">&amp;</span><span class="nx">Accounts</span><span class="p">{</span><span class="nx">bal</span><span class="p">:</span> <span class="nx">maps</span><span class="p">.</span><span class="nf">Clone</span><span class="p">(</span><span class="nx">bal</span><span class="p">)}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Get returns the user's balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">a</span> <span class="o">*</span><span class="nx">Accounts</span><span class="p">)</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">name</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>          <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">defer</span> <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Set changes the user's balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">a</span> <span class="o">*</span><span class="nx">Accounts</span><span class="p">)</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">name</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">amount</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>          <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">defer</span> <span class="nx">a</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">a</span><span class="p">.</span><span class="nx">bal</span><span class="p">[</span><span class="nx">name</span><span class="p">]</span> <span class="p">=</span> <span class="nx">amount</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>And handle purchases:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">acc</span> <span class="o">:=</span> <span class="nf">NewAccounts</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="s">"alice"</span><span class="p">:</span> <span class="mi">50</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="nx">castle</span> <span class="o">:=</span> <span class="nx">LegoSet</span><span class="p">{</span><span class="nx">name</span><span class="p">:</span> <span class="s">"Castle"</span><span class="p">,</span> <span class="nx">price</span><span class="p">:</span> <span class="mi">40</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">plants</span> <span class="o">:=</span> <span class="nx">LegoSet</span><span class="p">{</span><span class="nx">name</span><span class="p">:</span> <span class="s">"Plants"</span><span class="p">,</span> <span class="nx">price</span><span class="p">:</span> <span class="mi">20</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Shared mutex.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">var</span> <span class="nx">mu</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys a castle.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Protect the entire purchase with a mutex.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>            <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">defer</span> <span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Check and update the balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Alice buys plants.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Protect the entire purchase with a mutex.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>            <span class="c1">// (4)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">defer</span> <span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Check and update the balance.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">})</span>
+</span></span></code></pre></div><p>This isn't a very complex use case — I'm sure you've seen worse. Still, we had to put in some effort:</p><ul><li>Protect the balance with a mutex to prevent a data race ➊ ➋.</li><li>Protect the entire purchase operation with a mutex (or use compare-and-set) to make sure the final state is correct ➌ ➍.</li></ul><p>We were lucky to notice and prevent the race condition during a purchase. What if we had missed it?</p><p>There's another approach to achieving safe concurrency: instead of protecting shared state when working with multiple goroutines, we can avoid shared state altogether. Channels can help us do this.</p><p>Here's the idea: we'll create a <code>Processor</code> function that accepts purchase requests through an input channel, processes them, and sends the results back through an output channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// A purchase request.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Request</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">buyer</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">set</span>   <span class="nx">LegoSet</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// A purchase result.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Purchase</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">buyer</span>   <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">set</span>     <span class="nx">LegoSet</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">succeed</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">balance</span> <span class="kt">int</span> <span class="c1">// balance after purchase
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Processor handles purchases.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">Processor</span><span class="p">(</span><span class="nx">acc</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="kd">chan</span><span class="o">&lt;-</span> <span class="nx">Request</span><span class="p">,</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">Purchase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>Buyer goroutines will send requests to the processor's input channel and receive results (successful or failed purchases) from the output channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">buyer</span> <span class="p">=</span> <span class="s">"Alice"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span><span class="nx">buyer</span><span class="p">:</span> <span class="mi">50</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wishlist</span> <span class="o">:=</span> <span class="p">[]</span><span class="nx">LegoSet</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="nx">name</span><span class="p">:</span> <span class="s">"Castle"</span><span class="p">,</span> <span class="nx">price</span><span class="p">:</span> <span class="mi">40</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span><span class="nx">name</span><span class="p">:</span> <span class="s">"Plants"</span><span class="p">,</span> <span class="nx">price</span><span class="p">:</span> <span class="mi">20</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">reqs</span><span class="p">,</span> <span class="nx">purs</span> <span class="o">:=</span> <span class="nf">Processor</span><span class="p">(</span><span class="nx">acc</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Alice buys stuff.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">set</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">wishlist</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">reqs</span> <span class="o">&lt;-</span> <span class="nx">Request</span><span class="p">{</span><span class="nx">buyer</span><span class="p">:</span> <span class="nx">buyer</span><span class="p">,</span> <span class="nx">set</span><span class="p">:</span> <span class="nx">set</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">pur</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">purs</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="nx">pur</span><span class="p">.</span><span class="nx">succeed</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s bought the %s\n"</span><span class="p">,</span> <span class="nx">pur</span><span class="p">.</span><span class="nx">buyer</span><span class="p">,</span> <span class="nx">pur</span><span class="p">.</span><span class="nx">set</span><span class="p">.</span><span class="nx">name</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%s's balance: %d\n"</span><span class="p">,</span> <span class="nx">buyer</span><span class="p">,</span> <span class="nx">pur</span><span class="p">.</span><span class="nx">balance</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-processor" template="processor.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>This approach offers several benefits:</p><ul><li>Buyer goroutines send their requests and get results without worrying about how the purchase is done.</li><li>All the buying logic is handled inside the processor goroutine.</li><li>No need for mutexes.</li></ul><p>All that's left is to implement the processor. How about this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Processor handles purchases.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">Processor</span><span class="p">(</span><span class="nx">acc</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="kd">chan</span><span class="o">&lt;-</span> <span class="nx">Request</span><span class="p">,</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="nx">Purchase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">in</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">Request</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">Purchase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">acc</span> <span class="p">=</span> <span class="nx">maps</span><span class="p">.</span><span class="nf">Clone</span><span class="p">(</span><span class="nx">acc</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// Receive the purchase request.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">req</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">            <span class="c1">// Handle the purchase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">balance</span> <span class="o">:=</span> <span class="nx">acc</span><span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">buyer</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">pur</span> <span class="o">:=</span> <span class="nx">Purchase</span><span class="p">{</span><span class="nx">buyer</span><span class="p">:</span> <span class="nx">req</span><span class="p">.</span><span class="nx">buyer</span><span class="p">,</span> <span class="nx">set</span><span class="p">:</span> <span class="nx">req</span><span class="p">.</span><span class="nx">set</span><span class="p">,</span> <span class="nx">balance</span><span class="p">:</span> <span class="nx">balance</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="nx">balance</span> <span class="o">&gt;=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">set</span><span class="p">.</span><span class="nx">price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">pur</span><span class="p">.</span><span class="nx">balance</span> <span class="o">-=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">set</span><span class="p">.</span><span class="nx">price</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">pur</span><span class="p">.</span><span class="nx">succeed</span> <span class="p">=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">acc</span><span class="p">[</span><span class="nx">req</span><span class="p">.</span><span class="nx">buyer</span><span class="p">]</span> <span class="p">=</span> <span class="nx">pur</span><span class="p">.</span><span class="nx">balance</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="nx">pur</span><span class="p">.</span><span class="nx">succeed</span> <span class="p">=</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">            <span class="c1">// Send the result.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nx">pur</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">in</span><span class="p">,</span> <span class="nx">out</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-processor" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/race-conditions/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/race-conditions/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><blockquote><p>It would have been a good idea to add a way to stop the processor using context, but I decided not to do it to keep the code simple.</p></blockquote><p>The processor clones the original account states and works with its own copy. This approach makes sure there is no concurrent access to the accounts, so there are no races. Of course, we should avoid running two processors at the same time, or we could end up with two different versions of the truth.</p><p>It's not always easy to structure a program in a way that avoids shared state. But if you can, it's a good option.</p><h2 id="keep-it-up">Keep it up</h2><p>Now you know how to protect shared data (from data races) and sequences of operations (from race conditions) in a concurrent environment using mutexes. Be careful with them and always test your code thoroughly with the race detector enabled.</p><p>Use code reviews, because the race detector doesn't catch every data race and can't detect race conditions at all. Having someone else look over your code can be really helpful.</p><p>In the next chapter, we'll talk about <a href="https://antonz.org/go-concurrency/semaphores/">semaphores</a>.</p><p><a class="button" href="https://antonz.gumroad.com/l/go-concurrency">Buy for $25
+</a>&nbsp;
+or <a href="https://antonz.org/go-concurrency/">read online</a></p><script defer="" src="./Gist of Go_ Race conditions_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-06-15 10:30:00 +0000 UTC">15 Jun, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-concurrency/data-races/">Gist of Go: Data races</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-json-v2/">JSON evolution in Go: from v1 to v2</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/data-races/">Gist of Go: Data races</a></p><p><a href="https://antonz.org/default-transport/">Sad story of http.DefaultTransport</a></p><p><a href="https://antonz.org/go-map-shrink/">Go's map does not shrink</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

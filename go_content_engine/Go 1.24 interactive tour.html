@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<!-- saved from url=(0027)https://antonz.org/go-1-24/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Go 1.24 interactive tour</title>
+<meta name="description" content="Weak pointers, faster maps, directory-scoped access, and more."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897937119&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-1-24%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897937119&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Go 1.24 interactive tour_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-1-24/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Go 1.24 interactive tour"><meta property="og:description" content="Weak pointers, faster maps, directory-scoped access, and more."><meta property="og:url" content="https://antonz.org/go-1-24/"><meta property="og:image" content="https://antonz.org/go-1-24/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Go 1.24 interactive tour"><meta name="twitter:description" content="Weak pointers, faster maps, directory-scoped access, and more."><meta name="twitter:url" content="https://antonz.org/go-1-24/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-1-24/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Go 1.24 interactive tour_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-1-24/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Go 1.24 interactive tour</h1></header><p>Go 1.24 is out, so it's a good time to explore what's new. The official <a href="https://tip.golang.org/doc/go1.24">release&nbsp;notes</a> are pretty dry, so I prepared an interactive version with lots of examples showing what has changed and what the new behavior is.</p><p>Read on and see!</p><p><a href="https://antonz.org/go-1-24/#generic-type-aliases">Generic&nbsp;aliases</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#weak-pointers">Weak&nbsp;pointers</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#improved-finalizers">Improved&nbsp;finalizers</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#swiss-tables">Swiss&nbsp;tables</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#concurrent-hash-trie-map">Concurrent&nbsp;map</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#directory-scoped-filesystem-access">Directory&nbsp;scope</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#benchmark-loop">Benchmark&nbsp;loop</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#fake-time-for-testing">Fake&nbsp;time</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#test-context-and-working-directory">Test&nbsp;context</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#discard-log-output">Discard&nbsp;logs</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#appender-interfaces">Appender&nbsp;interfaces</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#more-string-and-byte-iterators">More&nbsp;iterators</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#sha-3-and-friends">SHA-3&nbsp;and&nbsp;friends</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#http-protocols">HTTP&nbsp;protocols</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#omit-zero-values-in-json">Omit&nbsp;zeros</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#random-text">Random&nbsp;text</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#tool-dependencies">Tool&nbsp;dependencies</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#json-output-for-build-install-and-test">JSON&nbsp;output</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#main-modules-version">Main&nbsp;version</a>&nbsp;•
+<a href="https://antonz.org/go-1-24/#summary">Summary</a></p><blockquote><p>This article is based on the official release notes from The Go Authors, licensed under the BSD-3-Clause license. This is not an exhaustive list; see the official release notes for that.</p></blockquote><p>I also provide links to the proposals (𝗣) and commits (𝗖𝗟) for the features described. Check them out for motivation and implementation details.</p><h2 id="generic-type-aliases">Generic type aliases</h2><p>A quick refresher: type alias in Go creates a synonym for a type without creating a new type.</p><p>When a type is <em>defined</em> based on another type, the types are different:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">ID</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">n</span> <span class="kt">int</span> <span class="p">=</span> <span class="mi">10</span>
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">id</span> <span class="nx">ID</span> <span class="p">=</span> <span class="mi">10</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// id = n
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Compile-time error:
+</span></span></span><span class="line"><span class="cl"><span class="c1">// cannot use n (variable of type int) as ID value in assignment
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="nx">id</span> <span class="p">=</span> <span class="nf">ID</span><span class="p">(</span><span class="nx">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"id is %T\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>When a type is declared as an <em>alias</em> of another type, the types remain the same:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">ID</span> <span class="p">=</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">n</span> <span class="kt">int</span> <span class="p">=</span> <span class="mi">10</span>
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">id</span> <span class="nx">ID</span> <span class="p">=</span> <span class="mi">10</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">id</span> <span class="p">=</span> <span class="nx">n</span> <span class="c1">// works fine
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"id is %T\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Go 1.24 supports <em>generic type aliases</em>: a type alias can be parameterized like a defined type. For example, you can define <code>Set</code> as a generic alias to a <code>map</code> with boolean values (not that it helps much):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Set</span><span class="p">[</span><span class="nx">T</span> <span class="nx">comparable</span><span class="p">]</span> <span class="p">=</span> <span class="kd">map</span><span class="p">[</span><span class="nx">T</span><span class="p">]</span><span class="kt">bool</span>
+</span></span><span class="line"><span class="cl"><span class="nx">set</span> <span class="o">:=</span> <span class="nx">Set</span><span class="p">[</span><span class="kt">string</span><span class="p">]{</span><span class="s">"one"</span><span class="p">:</span> <span class="kc">true</span><span class="p">,</span> <span class="s">"two"</span><span class="p">:</span> <span class="kc">true</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"'one' in set:"</span><span class="p">,</span> <span class="nx">set</span><span class="p">[</span><span class="s">"one"</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"'six' in set:"</span><span class="p">,</span> <span class="nx">set</span><span class="p">[</span><span class="s">"six"</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"set is %T\n"</span><span class="p">,</span> <span class="nx">set</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The <a href="https://go.dev/ref/spec#Alias_declarations">language spec</a> is updated accordingly. For now, you can disable the feature by setting <code>GOEXPERIMENT=noaliastypeparams</code>, but this option will be removed in Go 1.25.</p><p>𝗣 <a href="https://go.dev/issue/46477">46477</a></p><h2 id="weak-pointers">Weak pointers</h2><p>A <a href="https://tip.golang.org/pkg/weak"><code>weak</code></a> pointer references an object like a regular pointer. But unlike a regular pointer, a weak pointer cannot keep an object alive. If only weak pointers reference an object, the garbage collector can reclaim its memory.</p><p>Let's say we have a blob type:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Blob is a large byte slice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Blob</span> <span class="p">[]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">b</span> <span class="nx">Blob</span><span class="p">)</span> <span class="nf">String</span><span class="p">()</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Sprintf</span><span class="p">(</span><span class="s">"Blob(%d KB)"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span><span class="o">/</span><span class="mi">1024</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// newBlob returns a new Blob of the given size in KB.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">newBlob</span><span class="p">(</span><span class="nx">size</span> <span class="kt">int</span><span class="p">)</span> <span class="o">*</span><span class="nx">Blob</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="nx">size</span><span class="o">*</span><span class="mi">1024</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">size</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">b</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nb">byte</span><span class="p">(</span><span class="nx">i</span><span class="p">)</span> <span class="o">%</span> <span class="mi">255</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">(</span><span class="o">*</span><span class="nx">Blob</span><span class="p">)(</span><span class="o">&amp;</span><span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-weak-blob" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>And a pointer to a 1000 KB blob:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="o">:=</span> <span class="nf">newBlob</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span> <span class="c1">// 1000 KB
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We can create a <em>weak</em> pointer (<code>weak.Pointer</code>) from a regular one with <code>weak.Make</code>, and access the original pointer using the <code>Pointer.Value</code> method:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wb</span> <span class="o">:=</span> <span class="nx">weak</span><span class="p">.</span><span class="nf">Make</span><span class="p">(</span><span class="nf">newBlob</span><span class="p">(</span><span class="mi">1000</span><span class="p">))</span> <span class="c1">// 1000 KB
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">wb</span><span class="p">.</span><span class="nf">Value</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The regular pointer prevents the garbage collector from reclaiming the memory occupied by an object:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">heapSize</span> <span class="o">:=</span> <span class="nf">getAlloc</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="o">:=</span> <span class="nf">newBlob</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"value before GC ="</span><span class="p">,</span> <span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">runtime</span><span class="p">.</span><span class="nf">GC</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"value after GC ="</span><span class="p">,</span> <span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"heap size delta = %d KB\n"</span><span class="p">,</span> <span class="nf">heapDelta</span><span class="p">(</span><span class="nx">heapSize</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><details><summary>What are getAlloc and heapDelta</summary><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// heapDelta returns the delta in KB between
+</span></span></span><span class="line"><span class="cl"><span class="c1">// the current heap size and the previous heap size.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">heapDelta</span><span class="p">(</span><span class="nx">prev</span> <span class="kt">uint64</span><span class="p">)</span> <span class="kt">uint64</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">cur</span> <span class="o">:=</span> <span class="nf">getAlloc</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">cur</span> <span class="p">&lt;</span> <span class="nx">prev</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">cur</span> <span class="o">-</span> <span class="nx">prev</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// getAlloc returns the current heap size in KB.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">getAlloc</span><span class="p">()</span> <span class="kt">uint64</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">m</span> <span class="nx">runtime</span><span class="p">.</span><span class="nx">MemStats</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">runtime</span><span class="p">.</span><span class="nf">ReadMemStats</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">m</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">m</span><span class="p">.</span><span class="nx">Alloc</span> <span class="o">/</span> <span class="mi">1024</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></details><p>The weak pointer allows the garbage collector to free the memory:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">heapSize</span> <span class="o">:=</span> <span class="nf">getAlloc</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wb</span> <span class="o">:=</span> <span class="nx">weak</span><span class="p">.</span><span class="nf">Make</span><span class="p">(</span><span class="nf">newBlob</span><span class="p">(</span><span class="mi">1000</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"value before GC ="</span><span class="p">,</span> <span class="nx">wb</span><span class="p">.</span><span class="nf">Value</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">runtime</span><span class="p">.</span><span class="nf">GC</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"value after GC ="</span><span class="p">,</span> <span class="nx">wb</span><span class="p">.</span><span class="nf">Value</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"heap size delta = %d KB\n"</span><span class="p">,</span> <span class="nf">heapDelta</span><span class="p">(</span><span class="nx">heapSize</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>As you can see, <code>Pointer.Value</code> returns nil if the original pointer's value was reclaimed by the garbage collector. Note that it's not <em>guaranteed</em> to return nil as soon as an object is no longer referenced (or at any time later); the runtime decides when to reclaim the memory.</p><p>Weak pointers are useful for implementing a cache of large objects, ensuring that an object isn't kept alive just because it's in the cache. See the next section for an example.</p><p>𝗣 <a href="https://go.dev/issue/67552">67552</a> •
+𝗖𝗟 <a href="https://go.dev/cl/628455">628455</a></p><h2 id="improved-finalizers">Improved finalizers</h2><p>Remember our blob?</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="o">:=</span> <span class="nf">newBlob</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"b=%v, type=%T\n"</span><span class="p">,</span> <span class="nx">b</span><span class="p">,</span> <span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>What if we want to run a cleanup function when the blob is garbage collected?</p><p>Previously, we'd call <a href="https://tip.golang.org/pkg/runtime#SetFinalizer"><code>runtime.SetFinalizer</code></a>, which is notoriously hard to use. Now there's a better solution with <a href="https://tip.golang.org/pkg/runtime#AddCleanup"><code>runtime.AddCleanup</code></a>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="o">:=</span> <span class="nf">newBlob</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">now</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Register a cleanup function to run
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// when the object is no longer reachable.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">runtime</span><span class="p">.</span><span class="nf">AddCleanup</span><span class="p">(</span><span class="nx">b</span><span class="p">,</span> <span class="nx">cleanup</span><span class="p">,</span> <span class="nx">now</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span> <span class="p">=</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">runtime</span><span class="p">.</span><span class="nf">GC</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">cleanup</span><span class="p">(</span><span class="nx">created</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="s">"object is cleaned up! lifetime = %dms\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">created</span><span class="p">)</span><span class="o">/</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>AddCleanup</code> attaches a cleanup function to an object that runs when the object is no longer reachable. The cleanup function runs in a separate goroutine, which handles all cleanup calls for a program sequentially. Multiple cleanups can be attached to the same pointer.</p><p>Note an argument to the cleanup function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// AddCleanup attaches a cleanup function to ptr.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Some time after ptr is no longer reachable,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// the runtime will call cleanup(arg) in a separate goroutine.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">AddCleanup</span><span class="p">[</span><span class="nx">T</span><span class="p">,</span> <span class="nx">S</span> <span class="nx">any</span><span class="p">](</span><span class="nx">ptr</span> <span class="o">*</span><span class="nx">T</span><span class="p">,</span> <span class="nx">cleanup</span> <span class="kd">func</span><span class="p">(</span><span class="nx">S</span><span class="p">),</span> <span class="nx">arg</span> <span class="nx">S</span><span class="p">)</span> <span class="nx">Cleanup</span>
+</span></span></code></pre></div><p>In the example above, we passed the creation time as an argument, but typically it would be a resource we want to clean up when the pointer is garbage collected.</p><p>Here's an example. Suppose we want to implement a <code>WeakMap</code>, where an item can be discarded if no one references it's value. Let's use a <code>map</code> with <code>weak.Pointer</code> values:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// WeakMap is a map with weakly referenced values.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span> <span class="nx">comparable</span><span class="p">,</span> <span class="nx">V</span> <span class="nx">any</span><span class="p">]</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">store</span> <span class="kd">map</span><span class="p">[</span><span class="nx">K</span><span class="p">]</span><span class="nx">weak</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">[</span><span class="nx">V</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">mu</span>    <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// NewWeakMap creates a new WeakMap.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">NewWeakMap</span><span class="p">[</span><span class="nx">K</span> <span class="nx">comparable</span><span class="p">,</span> <span class="nx">V</span> <span class="nx">any</span><span class="p">]()</span> <span class="o">*</span><span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span><span class="p">,</span> <span class="nx">V</span><span class="p">]</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span><span class="p">,</span> <span class="nx">V</span><span class="p">]{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">store</span><span class="p">:</span> <span class="nb">make</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="nx">K</span><span class="p">]</span><span class="nx">weak</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">[</span><span class="nx">V</span><span class="p">]),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Len returns the number of items in the map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">wm</span> <span class="o">*</span><span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span><span class="p">,</span> <span class="nx">V</span><span class="p">])</span> <span class="nf">Len</span><span class="p">()</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="nx">wm</span><span class="p">.</span><span class="nx">store</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-weak-map-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Getting a value is straightforward:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Get returns the value stored in the map for a key,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// or nil if no value is present.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">wm</span> <span class="o">*</span><span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span><span class="p">,</span> <span class="nx">V</span><span class="p">])</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">key</span> <span class="nx">K</span><span class="p">)</span> <span class="o">*</span><span class="nx">V</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">wp</span><span class="p">,</span> <span class="nx">found</span> <span class="o">:=</span> <span class="nx">wm</span><span class="p">.</span><span class="nx">store</span><span class="p">[</span><span class="nx">key</span><span class="p">];</span> <span class="nx">found</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">wp</span><span class="p">.</span><span class="nf">Value</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-weak-map-2" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now, how do we ensure the item is removed from the map when the runtime reclaims the value? With <code>runtime.AddCleanup</code>, it's simple:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Set sets the value for a key.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">wm</span> <span class="o">*</span><span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span><span class="p">,</span> <span class="nx">V</span><span class="p">])</span> <span class="nf">Set</span><span class="p">(</span><span class="nx">key</span> <span class="nx">K</span><span class="p">,</span> <span class="nx">value</span> <span class="o">*</span><span class="nx">V</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Create a weak pointer for the value.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">wp</span> <span class="o">:=</span> <span class="nx">weak</span><span class="p">.</span><span class="nf">Make</span><span class="p">(</span><span class="nx">value</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Remove the item when the value is reclaimed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">runtime</span><span class="p">.</span><span class="nf">AddCleanup</span><span class="p">(</span><span class="nx">value</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nx">Delete</span><span class="p">,</span> <span class="nx">key</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Store the weak pointer in the map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">wm</span><span class="p">.</span><span class="nx">store</span><span class="p">[</span><span class="nx">key</span><span class="p">]</span> <span class="p">=</span> <span class="nx">wp</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Delete removes an item for a key.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">wm</span> <span class="o">*</span><span class="nx">WeakMap</span><span class="p">[</span><span class="nx">K</span><span class="p">,</span> <span class="nx">V</span><span class="p">])</span> <span class="nf">Delete</span><span class="p">(</span><span class="nx">key</span> <span class="nx">K</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wm</span><span class="p">.</span><span class="nx">mu</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">delete</span><span class="p">(</span><span class="nx">wm</span><span class="p">.</span><span class="nx">store</span><span class="p">,</span> <span class="nx">key</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-weak-map-3" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We pass the current key to the cleanup function (<code>wm.Delete</code>) so it knows which item to remove from the map.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">sink</span> <span class="o">*</span><span class="nx">Blob</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span> <span class="o">:=</span> <span class="nx">NewWeakMap</span><span class="p">[</span><span class="kt">string</span><span class="p">,</span> <span class="nx">Blob</span><span class="p">]()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"one"</span><span class="p">,</span> <span class="nf">newBlob</span><span class="p">(</span><span class="mi">10</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wm</span><span class="p">.</span><span class="nf">Set</span><span class="p">(</span><span class="s">"two"</span><span class="p">,</span> <span class="nf">newBlob</span><span class="p">(</span><span class="mi">20</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Before GC:"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"len(map) ="</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Len</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"map[one] ="</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"one"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"map[two] ="</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"two"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Allow the garbage collector to reclaim
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// the second item, but not the first one.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">sink</span> <span class="p">=</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"one"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">runtime</span><span class="p">.</span><span class="nf">GC</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"After GC:"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"len(map) ="</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Len</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"map[one] ="</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"one"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"map[two] ="</span><span class="p">,</span> <span class="nx">wm</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"two"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-weak-blob s-weak-map-1 s-weak-map-2 s-weak-map-3" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Works like a charm!</p><p>Note that the cleanup function is not <em>guaranteed</em> to run immediately after an object is no longer referenced; it may execute at an arbitrary time in the future.</p><p>With the introduction of <code>AddCleanup</code>, the usage of <code>SetFinalizer</code> is discouraged. New code should prefer <code>AddCleanup</code>.</p><p>𝗣 <a href="https://go.dev/issue/67535">67535</a> •
+𝗖𝗟 <a href="https://go.dev/cl/627695">627695</a>, <a href="https://go.dev/cl/627975">627975</a></p><h2 id="swiss-tables">Swiss tables</h2><p>After many years, the Go team decided to change the underlying <code>map</code> implementation! It is now based on <a href="https://abseil.io/about/design/swisstables">SwissTable</a>, which offers several optimizations:</p><ul><li>Access and assignment of large (&gt;1024 entries) maps improved ~30%.</li><li>Assignment into pre-sized maps improved ~35%.</li><li>Iteration faster across the board by ~10%, ~60% for maps with low load (large size, few entries).</li></ul><details><summary>Benchmarks</summary><p>These results are <a href="https://github.com/golang/go/issues/54766#issuecomment-2542444404">missing a few optimizations</a>, but give a good overview of changes.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">                                                          │ /tmp/noswiss.lu.txt │          /tmp/swiss.lu.txt           │
+</span></span><span class="line"><span class="cl">                                                          │       sec/op        │    sec/op      vs base               │
+</span></span><span class="line"><span class="cl">MapIter/impl=runtimeMap/t=Int64/len=64-12                          642.0n ±  3%    603.8n ±  6%   -5.95% (p=0.004 n=6)
+</span></span><span class="line"><span class="cl">MapIter/impl=runtimeMap/t=Int64/len=8192-12                        87.98µ ±  1%    78.80µ ±  1%  -10.43% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIter/impl=runtimeMap/t=Int64/len=4194304-12                     47.40m ±  2%    44.41m ±  2%   -6.30% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIterLowLoad/impl=runtimeMap/t=Int64/len=64-12                  145.85n ±  3%    92.85n ±  2%  -36.34% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIterLowLoad/impl=runtimeMap/t=Int64/len=8192-12                13.205µ ±  0%    6.078µ ±  1%  -53.97% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIterLowLoad/impl=runtimeMap/t=Int64/len=4194304-12              15.20m ±  1%    18.22m ±  1%  +19.87% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIterGrow/impl=runtimeMap/t=Int64/len=64-12                     10.196µ ±  2%    8.092µ ±  8%  -20.63% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIterGrow/impl=runtimeMap/t=Int64/len=8192-12                    1.259m ±  2%    1.008m ±  4%  -19.97% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapIterGrow/impl=runtimeMap/t=Int64/len=4194304-12                  1.424 ±  5%     1.275 ±  0%  -10.47% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=Int64/len=64-12                        14.08n ±  4%    15.28n ±  3%   +8.45% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=Int64/len=8192-12                      27.61n ±  1%    18.80n ±  1%  -31.89% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=Int64/len=4194304-12                   82.94n ±  1%   102.20n ±  0%  +23.22% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=Int32/len=64-12                        13.84n ±  5%    15.56n ±  2%  +12.39% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=Int32/len=8192-12                      26.90n ±  2%    18.47n ±  2%  -31.34% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=Int32/len=4194304-12                   79.60n ±  0%    93.00n ±  0%  +16.83% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=String/len=64-12                       16.36n ±  6%    18.69n ±  1%  +14.24% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=String/len=8192-12                     38.39n ±  1%    25.67n ±  1%  -33.13% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetHit/impl=runtimeMap/t=String/len=4194304-12                  146.0n ±  1%    172.2n ±  1%  +17.95% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=Int64/len=64-12                       15.63n ±  8%    15.08n ±  8%        ~ (p=0.240 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=Int64/len=8192-12                     17.55n ±  1%    17.59n ±  4%        ~ (p=0.909 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=Int64/len=4194304-12                 106.40n ±  1%    72.99n ±  2%  -31.40% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=Int32/len=64-12                       15.63n ±  7%    15.27n ±  8%        ~ (p=0.132 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=Int32/len=8192-12                     17.18n ±  3%    17.25n ±  1%        ~ (p=0.729 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=Int32/len=4194304-12                 100.15n ±  1%    74.71n ±  1%  -25.40% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=String/len=64-12                      18.96n ±  3%    18.19n ± 11%        ~ (p=0.132 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=String/len=8192-12                    23.79n ±  3%    20.98n ±  2%  -11.79% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapGetMiss/impl=runtimeMap/t=String/len=4194304-12                134.85n ±  1%    84.82n ±  1%  -37.10% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=Int64/len=64-12                       5.886µ ±  3%    5.699µ ±  3%   -3.18% (p=0.015 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=Int64/len=8192-12                     739.1µ ±  2%    816.0µ ±  4%  +10.41% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=Int64/len=4194304-12                  929.3m ±  1%    894.2m ±  5%        ~ (p=0.065 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=Int32/len=64-12                       5.487µ ±  4%    5.326µ ±  2%   -2.93% (p=0.028 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=Int32/len=8192-12                     681.6µ ±  2%    767.3µ ±  2%  +12.58% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=Int32/len=4194304-12                  831.9m ±  2%    802.9m ±  1%   -3.49% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=String/len=64-12                      7.607µ ±  2%    7.379µ ±  2%   -2.99% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=String/len=8192-12                    1.204m ±  4%    1.212m ±  4%        ~ (p=0.310 n=6)
+</span></span><span class="line"><span class="cl">MapPutGrow/impl=runtimeMap/t=String/len=4194304-12                  1.699 ±  2%     1.876 ±  1%  +10.37% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=Int64/len=64-12                2.179µ ±  1%    1.428µ ±  5%  -34.47% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=Int64/len=8192-12              277.6µ ±  2%    198.6µ ±  1%  -28.45% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=Int64/len=4194304-12           389.7m ±  1%    518.2m ±  1%  +32.97% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=Int32/len=64-12                1.784µ ±  2%    1.110µ ±  3%  -37.78% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=Int32/len=8192-12              228.1µ ±  5%    151.4µ ±  4%  -33.62% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=Int32/len=4194304-12           361.5m ±  1%    481.2m ±  1%  +33.10% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=String/len=64-12               2.670µ ±  3%    2.167µ ±  3%  -18.81% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=String/len=8192-12             380.1µ ±  2%    417.2µ ±  9%   +9.77% (p=0.015 n=6)
+</span></span><span class="line"><span class="cl">MapPutPreAllocate/impl=runtimeMap/t=String/len=4194304-12          493.1m ±  4%    718.1m ±  7%  +45.62% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutReuse/impl=runtimeMap/t=Int32/len=64-12                     1421.0n ±  3%    804.0n ±  5%  -43.42% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutReuse/impl=runtimeMap/t=Int32/len=8192-12                    192.4µ ±  1%    120.6µ ±  1%  -37.30% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutReuse/impl=runtimeMap/t=Int32/len=4194304-12                 364.0m ±  2%    473.0m ±  2%  +29.95% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutReuse/impl=runtimeMap/t=String/len=64-12                     1.602µ ±  4%    1.083µ ± 14%  -32.41% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutReuse/impl=runtimeMap/t=String/len=8192-12                   232.4µ ±  1%    165.7µ ±  2%  -28.68% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutReuse/impl=runtimeMap/t=String/len=4194304-12                440.4m ±  2%    672.5m ±  1%  +52.72% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=Int64/len=64-12                     34.25n ±  3%    37.76n ±  5%  +10.23% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=Int64/len=8192-12                   57.91n ±  2%    45.24n ±  2%  -21.89% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=Int64/len=4194304-12                170.5n ±  0%    222.0n ±  1%  +30.20% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=Int32/len=64-12                     34.06n ±  4%    37.87n ±  6%  +11.16% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=Int32/len=8192-12                   54.92n ±  1%    43.41n ±  2%  -20.96% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=Int32/len=4194304-12                153.4n ±  1%    178.3n ±  2%  +16.26% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=String/len=64-12                    42.11n ±  8%    48.48n ±  7%  +15.12% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=String/len=8192-12                  78.46n ±  1%    56.10n ±  2%  -28.50% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapPutDelete/impl=runtimeMap/t=String/len=4194304-12               204.6n ±  1%    261.4n ±  1%  +27.76% (p=0.002 n=6)
+</span></span></code></pre></div></details><p>You can disable the new implementation by setting <code>GOEXPERIMENT=noswissmap</code> at build time.</p><p>𝗣 <a href="https://go.dev/issue/54766">54766</a></p><h2 id="concurrent-hash-trie-map">Concurrent hash-trie map</h2><p>The implementation of <a href="https://tip.golang.org/pkg/sync#Map"><code>sync.Map</code></a> has changed to a concurrent hash-trie, improving performance, especially for map modifications. Modifications of disjoint key sets are less likely to contend on larger maps, and no ramp-up time is needed to achieve low-contention loads.</p><p>The new implementation outperforms the old one on nearly every benchmark:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">                                │     before      │                 after                 │
+</span></span><span class="line"><span class="cl">                                │     sec/op      │    sec/op      vs base                │
+</span></span><span class="line"><span class="cl">MapLoadMostlyHits                   7.870n ±   1%    8.415n ±  3%    +6.93% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapLoadMostlyMisses                 7.210n ±   1%    5.314n ±  2%   -26.28% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapLoadOrStoreBalanced             360.10n ±  18%    71.78n ±  2%   -80.07% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapLoadOrStoreUnique                707.2n ±  18%    135.2n ±  4%   -80.88% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapLoadOrStoreCollision             5.089n ± 201%    3.963n ±  1%   -22.11% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapLoadAndDeleteBalanced           17.045n ±  64%    5.280n ±  1%   -69.02% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapLoadAndDeleteUnique             14.250n ±  57%    6.452n ±  1%         ~ (p=0.368 n=6)
+</span></span><span class="line"><span class="cl">MapLoadAndDeleteCollision           19.34n ±  39%    23.31n ± 27%         ~ (p=0.180 n=6)
+</span></span><span class="line"><span class="cl">MapRange                            3.055µ ±   3%    1.918µ ±  2%   -37.23% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapAdversarialAlloc                245.30n ±   6%    14.90n ± 23%   -93.92% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapAdversarialDelete              143.550n ±   2%    8.184n ±  1%   -94.30% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapDeleteCollision                  9.199n ±  65%    3.165n ±  1%   -65.59% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapSwapCollision                    164.7n ±   7%    108.7n ± 36%   -34.01% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapSwapMostlyHits                   33.12n ±  15%    35.79n ±  9%         ~ (p=0.180 n=6)
+</span></span><span class="line"><span class="cl">MapSwapMostlyMisses                 604.5n ±   5%    280.2n ±  7%   -53.64% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndSwapCollision          96.02n ±  40%    69.93n ± 24%   -27.17% (p=0.041 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndSwapNoExistingKey      6.345n ±   1%    6.202n ±  1%    -2.24% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndSwapValueNotEqual      6.121n ±   3%    5.564n ±  4%    -9.09% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndSwapMostlyHits         44.21n ±  13%    43.46n ± 11%         ~ (p=0.485 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndSwapMostlyMisses       33.51n ±   6%    13.51n ±  5%   -59.70% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndDeleteCollision        27.85n ± 104%    31.02n ± 26%         ~ (p=0.180 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndDeleteMostlyHits       50.43n ±  33%   109.45n ±  8%  +117.03% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapCompareAndDeleteMostlyMisses     27.17n ±   7%    11.37n ±  3%   -58.14% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">MapClear                            300.2n ±   5%    124.2n ±  8%   -58.64% (p=0.002 n=6)
+</span></span><span class="line"><span class="cl">geomean                             50.38n           25.79n         -48.81%
+</span></span></code></pre></div><p>The load-hit case (<code>MapLoadMostlyHits</code>) is slightly slower due to Swiss Tables improving the performance of the old <code>sync.Map</code>. Some benchmarks show a seemingly large slowdown, but that's mainly due to the fact that the new implementation shrinks promptly (as elements are deleted from the map), whereas the old one shrinks in generations (the dirty map needs to be promoted).</p><p>The concurrent hash-trie map (<code>HashTrieMap</code>) was initially added for the <code>unique</code> package in Go 1.23. It proved faster than the original <code>sync.Map</code> in many cases, so the Go team reimplemented <code>sync.Map</code> as a wrapper for <code>HashTrieMap</code>.</p><p>You can disable the new implementation by setting <code>GOEXPERIMENT=nosynchashtriemap</code> at build time.</p><p>𝗣 <a href="https://go.dev/issue/70683">70683</a> •
+𝗖𝗟 <a href="https://go.dev/cl/608335">608335</a></p><h2 id="directory-scoped-filesystem-access">Directory-scoped filesystem access</h2><p>The new <a href="https://tip.golang.org/pkg/os#Root"><code>os.Root</code></a> type restricts filesystem operations to a specific directory.</p><p>The <code>OpenRoot</code> function opens a directory and returns a <code>Root</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">dir</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">OpenRoot</span><span class="p">(</span><span class="s">"data"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"opened root=%s, err=%v\n"</span><span class="p">,</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Name</span><span class="p">(),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet id="s-os-root" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Methods on <code>Root</code> operate within the directory and do not allow paths outside the directory:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">file</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">"01.txt"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"opened file=%s, err=%v\n"</span><span class="p">,</span> <span class="nx">file</span><span class="p">.</span><span class="nf">Name</span><span class="p">(),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">file</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">"../main.txt"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"opened file=%v, err=%v\n"</span><span class="p">,</span> <span class="nx">file</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-os-root" template="root.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Methods on <code>Root</code> mirror most file system operations available in the <code>os</code> package:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">file</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Create</span><span class="p">(</span><span class="s">"new.txt"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"created file=%s, err=%v\n"</span><span class="p">,</span> <span class="nx">file</span><span class="p">.</span><span class="nf">Name</span><span class="p">(),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">stat</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Stat</span><span class="p">(</span><span class="s">"02.txt"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="s">"file info: name=%s, size=%dB, mode=%v, err=%v\n"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stat</span><span class="p">.</span><span class="nf">Name</span><span class="p">(),</span> <span class="nx">stat</span><span class="p">.</span><span class="nf">Size</span><span class="p">(),</span> <span class="nx">stat</span><span class="p">.</span><span class="nf">Mode</span><span class="p">(),</span> <span class="nx">err</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">err</span> <span class="p">=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Remove</span><span class="p">(</span><span class="s">"03.txt"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"deleted 03.txt, err=%v\n"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-os-root" template="root.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>You should close the <code>Root</code> after you are done with it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">process</span><span class="p">(</span><span class="nx">dir</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">r</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">OpenRoot</span><span class="p">(</span><span class="nx">dir</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">r</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// do stuff
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>After the <code>Root</code> is closed, calling its methods return errors:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">err</span> <span class="p">=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"closed root, err=%v\n"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">file</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dir</span><span class="p">.</span><span class="nf">Open</span><span class="p">(</span><span class="s">"01.txt"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"opened file=%v, err=%v\n"</span><span class="p">,</span> <span class="nx">file</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-os-root" template="root.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>Root</code> methods follow symbolic links, but these links cannot reference locations outside the root. Symbolic links must be relative. Methods do not restrict traversal of filesystem boundaries, Linux bind mounts, /proc special files, or access to Unix device files.</p><p>On most platforms, creating a <code>Root</code> opens a file descriptor or handle for the directory. If the directory is moved, <code>Root</code> methods reference the directory in its new location.</p><p>𝗣 <a href="https://go.dev/issue/67002">67002</a> •
+𝗖𝗟 <a href="https://go.dev/cl/612136">612136</a>, <a href="https://go.dev/cl/627076">627076</a>, <a href="https://go.dev/cl/627475">627475</a>, <a href="https://go.dev/cl/629518">629518</a>, <a href="https://go.dev/cl/629555">629555</a></p><h2 id="benchmark-loop">Benchmark loop</h2><p>You are probably familiar with a benchmark loop (<code>for range b.N</code>):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">sink</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkSlicesMax</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Setup the benchmark.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">s</span> <span class="o">:=</span> <span class="nf">randomSlice</span><span class="p">(</span><span class="mi">10_000</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span><span class="p">.</span><span class="nf">ResetTimer</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Run the benchmark.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">for</span> <span class="k">range</span> <span class="nx">b</span><span class="p">.</span><span class="nx">N</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">sink</span> <span class="p">=</span> <span class="nx">slices</span><span class="p">.</span><span class="nf">Max</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="benchmark.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Go conveniently handles the mechanics of running benchmarks, determines a reasonable <code>b.N</code>, and provides the final results in nanoseconds per operation.</p><p>Yet, there are a few nuances to keep in mind:</p><ul><li>The benchmark function (<code>BenchmarkSlicesMax</code>) runs multiple times, so the setup step also runs multiple times (nothing we can do about that).</li><li>We need to reset the benchmark timer to exclude the setup time from the benchmark time.</li><li>We have to ensure the compiler doesn't optimize away the benchmarked call (<code>slices.Max</code>) by using a sink variable.</li></ul><p>Go 1.24 introduces the faster and less error-prone <a href="https://tip.golang.org/pkg/testing#B.Loop"><code>testing.B.Loop</code></a> to replace the traditional <code>for range b.N</code> loop:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">BenchmarkSlicesMax</span><span class="p">(</span><span class="nx">b</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">B</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Setup the benchmark.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">s</span> <span class="o">:=</span> <span class="nf">randomSlice</span><span class="p">(</span><span class="mi">10_000</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Run the benchmark.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">for</span> <span class="nx">b</span><span class="p">.</span><span class="nf">Loop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">slices</span><span class="p">.</span><span class="nf">Max</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="benchmark.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>b.Loop</code> solves issues with the <code>b.N</code> method:</p><ul><li>The benchmark function executes once per <code>-count</code>, so setup and cleanup steps run only once.</li><li>Everything outside the <code>b.Loop</code> doesn't affect the benchmark time, so <code>b.ResetTimer</code> isn't needed.</li><li>Compiler never optimizes away calls to functions within the body of a <code>b.Loop</code>.</li></ul><p>Benchmarks should use either <code>b.Loop</code> or a <code>b.N</code>-style loop, but not both.</p><p>𝗣 <a href="https://go.dev/issue/61515">61515</a> •
+𝗖𝗟 <a href="https://go.dev/cl/608798">608798</a>, <a href="https://go.dev/cl/612043">612043</a>, <a href="https://go.dev/cl/612835">612835</a>, <a href="https://go.dev/cl/627755">627755</a>, <a href="https://go.dev/cl/635898">635898</a></p><h2 id="fake-time-for-testing">Fake time for testing</h2><p>Suppose we have a function that waits for a value from a channel for one minute, then times out:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Read reads a value from the input channel and returns it.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// Timeouts after 60 seconds.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">Read</span><span class="p">(</span><span class="nx">in</span> <span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span> <span class="p">(</span><span class="kt">int</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nx">v</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">v</span><span class="p">,</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">time</span><span class="p">.</span><span class="nf">After</span><span class="p">(</span><span class="mi">60</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">errors</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="s">"timeout"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-synctest-read" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We use it like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">ch</span> <span class="o">&lt;-</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">val</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">Read</span><span class="p">(</span><span class="nx">ch</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"val=%v, err=%v\n"</span><span class="p">,</span> <span class="nx">val</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-synctest-read" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>How do we test the timeout situation? Surely we don't want the test to actually wait 60 seconds. We could make the timeout a parameter (we probably should), but let's say we prefer not to.</p><p>The new <a href="https://github.com/golang/go/blob/master/src/testing/synctest/synctest.go"><code>testing/synctest</code></a> package to the rescue! The <code>synctest.Run()</code> function executes an isolated "bubble" in a new goroutine. Within the bubble, <code>time</code> package functions use a fake clock, allowing our test to pass instantly:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">TestReadTimeout</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">synctest</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">Read</span><span class="p">(</span><span class="nx">ch</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">"expected timeout error, got nil"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">PASS
+</span></span></code></pre></div><p>Goroutines in the bubble use a synthetic time implementation (the initial time is midnight UTC 2000-01-01). Time advances when every goroutine in the bubble is blocked. In our example, when the only goroutine is blocked on <code>select</code> in <code>Read</code>, the bubble's clock advances 60 seconds, triggering the timeout case.</p><p>Another useful function is <code>synctest.Wait</code>. It waits for all goroutines in the current bubble to block, then resumes execution:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">synctest</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">timeout</span> <span class="p">=</span> <span class="mi">5</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Second</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">WithTimeout</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">(),</span> <span class="nx">timeout</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nf">cancel</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Wait just less than the timeout.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">timeout</span> <span class="o">-</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Nanosecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">synctest</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"before timeout: ctx.Err() = %v\n"</span><span class="p">,</span> <span class="nx">ctx</span><span class="p">.</span><span class="nf">Err</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Wait the rest of the way until the timeout.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Nanosecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">synctest</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"after timeout:  ctx.Err() = %v\n"</span><span class="p">,</span> <span class="nx">ctx</span><span class="p">.</span><span class="nf">Err</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl"><span class="p">})</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">before timeout: ctx.Err() = &lt;nil&gt;
+</span></span><span class="line"><span class="cl">after timeout:  ctx.Err() = context deadline exceeded
+</span></span></code></pre></div><p>The <code>synctest</code> package is experimental and must be enabled by setting <code>GOEXPERIMENT=synctest</code> at build time. The package API is subject to change in future releases. See the proposal for more information and to provide feeback.</p><p>𝗣 <a href="https://go.dev/issue/67434">67434</a> •
+𝗖𝗟 <a href="https://go.dev/cl/629735">629735</a>, <a href="https://go.dev/cl/629856">629856</a></p><h2 id="test-context-and-working-directory">Test context and working directory</h2><p>Suppose we want to test this very useful server:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Server provides answers to all questions.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Server</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Get returns an answer from the server.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Server</span><span class="p">)</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">query</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// startServer starts a server that can
+</span></span></span><span class="line"><span class="cl"><span class="c1">// be stopped by canceling the context.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">startServer</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span> <span class="o">*</span><span class="nx">Server</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nf">Done</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// Free resources.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="o">&amp;</span><span class="nx">Server</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-test-server" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Here's a beautiful test I wrote:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">srv</span> <span class="o">:=</span> <span class="nf">startServer</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">srv</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"how much?"</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">42</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">"unexpected value"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-test-server" template="test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Hooray, the test passed! However, there's a problem: I used an empty context, so the server didn't actually stop. Such resource leakage can be an issue, especially with many tests.</p><p>I can fix it by creating a cancelable context and canceling it when the test completes:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">WithCancel</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nf">cancel</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">srv</span> <span class="o">:=</span> <span class="nf">startServer</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">srv</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"how much?"</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">42</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">"unexpected value"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-test-server" template="test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Even better, now I can use the new <a href="https://tip.golang.org/pkg/testing#T.Context"><code>T.Context</code></a> method. It returns a context that is canceled after the test completes:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">srv</span> <span class="o">:=</span> <span class="nf">startServer</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nf">Context</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">srv</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"how much?"</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">42</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">"unexpected value"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-test-server" template="test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>One caveat remains. What if cleaning up server resources takes time? The <code>startServer</code> goroutine will initiate the cleanup when the test context closes, but will it finish before the main goroutine exits? Not necessarily.</p><p>There is a useful test context property that can help us. The test context is canceled <em>just before</em> <code>T.Cleanup</code>-registered functions are called. So we can use <code>T.Cleanup</code> to register a function that waits for the server to stop:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">srv</span> <span class="o">:=</span> <span class="nf">startServer</span><span class="p">(</span><span class="nx">t</span><span class="p">.</span><span class="nf">Context</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Cleanup</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="o">&lt;-</span><span class="nx">srv</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">srv</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"how much?"</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">42</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Fatal</span><span class="p">(</span><span class="s">"unexpected value"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="test-cleanup.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><details><summary>The server code has also changed</summary><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// Server provides answers to all questions.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Server</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">done</span> <span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Get returns an anser from the server.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Server</span><span class="p">)</span> <span class="nf">Get</span><span class="p">(</span><span class="nx">query</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">42</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Stop stops the server.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Server</span><span class="p">)</span> <span class="nf">Stop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Simulate a long operation.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"server stopped"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">close</span><span class="p">(</span><span class="nx">s</span><span class="p">.</span><span class="nx">done</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Done returns a channel that's closed when the server stops.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Server</span><span class="p">)</span> <span class="nf">Done</span><span class="p">()</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{}</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">s</span><span class="p">.</span><span class="nx">done</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// startServer starts a server that can
+</span></span></span><span class="line"><span class="cl"><span class="c1">// be stopped by canceling the context.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">startServer</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span> <span class="o">*</span><span class="nx">Server</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">srv</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">Server</span><span class="p">{</span><span class="nx">done</span><span class="p">:</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kd">struct</span><span class="p">{})}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">select</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">case</span> <span class="o">&lt;-</span><span class="nx">ctx</span><span class="p">.</span><span class="nf">Done</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">srv</span><span class="p">.</span><span class="nf">Stop</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">srv</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></details><p>Like tests, benchmarks have their own <a href="https://tip.golang.org/pkg/testing#B.Context"><code>B.Context</code></a>.</p><p>𝗣 <a href="https://go.dev/issue/36532">36532</a> •
+𝗖𝗟 <a href="https://go.dev/cl/603959">603959</a>, <a href="https://go.dev/cl/637236">637236</a></p><p>Oh, and speaking of tests, the new <a href="https://tip.golang.org/pkg/testing#T.Chdir"><code>T.Chdir</code></a> and <a href="https://tip.golang.org/pkg/testing#B.Chdir"><code>B.Chdir</code></a> methods change the working directory for the duration of a test or benchmark:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="s">"test1"</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Change the working directory for the current test.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">t</span><span class="p">.</span><span class="nf">Chdir</span><span class="p">(</span><span class="s">"/tmp"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">cwd</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getwd</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">cwd</span> <span class="o">!=</span> <span class="s">"/tmp"</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">t</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">"unexpected cwd: %s"</span><span class="p">,</span> <span class="nx">cwd</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">t</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="s">"test2"</span><span class="p">,</span> <span class="kd">func</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// This test uses the original working directory.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">cwd</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getwd</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">cwd</span> <span class="o">==</span> <span class="s">"/tmp"</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">t</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">"unexpected cwd: %s"</span><span class="p">,</span> <span class="nx">cwd</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>Chdir</code> methods use <code>Cleanup</code> to restore the working directory to its original value after the test or benchmark.</p><p>𝗣 <a href="https://go.dev/issue/62516">62516</a> • 𝗖𝗟 <a href="https://go.dev/cl/529895">529895</a></p><h2 id="discard-log-output">Discard log output</h2><p>An easy way to create a silent logger (e.g. for testing or benchmarking) is to use <code>slog.TextHandler</code> with <code>io.Discard</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">log</span> <span class="o">:=</span> <span class="nx">slog</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">slog</span><span class="p">.</span><span class="nf">NewTextHandler</span><span class="p">(</span><span class="nx">io</span><span class="p">.</span><span class="nx">Discard</span><span class="p">,</span> <span class="kc">nil</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">"Prints nothing"</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now there's an even easier way with the <a href="https://tip.golang.org/pkg/log/slog#DiscardHandler"><code>slog.DiscardHandler</code></a> package-level variable:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">log</span> <span class="o">:=</span> <span class="nx">slog</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">slog</span><span class="p">.</span><span class="nx">DiscardHandler</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">"Prints nothing"</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>𝗣 <a href="https://go.dev/issue/62005">62005</a> •
+𝗖𝗟 <a href="https://go.dev/cl/626486">626486</a></p><h2 id="appender-interfaces">Appender interfaces</h2><p>Two new interfaces, <a href="https://tip.golang.org/pkg/encoding#TextAppender"><code>encoding.TextAppender</code></a> and <a href="https://tip.golang.org/pkg/encoding#BinaryAppender"><code>encoding.BinaryAppender</code></a>, allow appending an object's textual or binary representation to a byte slice.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">TextAppender</span> <span class="kd">interface</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// AppendText appends the textual representation of itself to the end of b
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// (allocating a larger slice if necessary) and returns the updated slice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">AppendText</span><span class="p">(</span><span class="nx">b</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">)</span> <span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">BinaryAppender</span> <span class="kd">interface</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// AppendBinary appends the binary representation of itself to the end of b
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// (allocating a larger slice if necessary) and returns the updated slice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">//
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">AppendBinary</span><span class="p">(</span><span class="nx">b</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">)</span> <span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>These interfaces provide the same functionality as <code>TextMarshaler</code> and <code>BinaryMarshaler</code>, but instead of allocating a new slice each time, they append the data directly to an existing slice.</p><p>These interfaces are now implemented by standard library types that already implemented <code>TextMarshaler</code> or <code>BinaryMarshaler</code>: <code>math/big.Float</code>, <code>net.IP</code>, <code>regexp.Regexp</code>, <code>time.Time</code>, and others:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// 2021-02-03T04:05:06Z
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">t</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Date</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">UTC</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">b</span> <span class="p">[]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl"><span class="nx">b</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">t</span><span class="p">.</span><span class="nf">AppendText</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"b=%s, err=%v"</span><span class="p">,</span> <span class="nx">b</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>𝗣 <a href="https://go.dev/issue/62384">62384</a> •
+𝗖𝗟 <a href="https://go.dev/cl/601595">601595</a>, <a href="https://go.dev/cl/601776">601776</a>, <a href="https://go.dev/cl/603255">603255</a>, <a href="https://go.dev/cl/603815">603815</a>, <a href="https://go.dev/cl/605056">605056</a>, <a href="https://go.dev/cl/605758">605758</a>, <a href="https://go.dev/cl/606655">606655</a>, <a href="https://go.dev/cl/607079">607079</a>, <a href="https://go.dev/cl/607520">607520</a>, <a href="https://go.dev/cl/634515">634515</a></p><h2 id="more-string-and-byte-iterators">More string and byte iterators</h2><p>Go 1.23 went all in on iterators, so we see more and more of them in the standard library.</p><p>New functions in the <a href="https://tip.golang.org/pkg/strings"><code>strings</code></a> package:</p><p><a href="https://tip.golang.org/pkg/strings#Lines"><code>Lines</code></a> returns an iterator over the newline-terminated lines in the string <code>s</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">s</span> <span class="o">:=</span> <span class="s">"one\ntwo\nsix"</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">line</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Lines</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Print</span><span class="p">(</span><span class="nx">line</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><a href="https://tip.golang.org/pkg/strings#SplitSeq"><code>SplitSeq</code></a> returns an iterator over all substrings of <code>s</code> separated by <code>sep</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">s</span> <span class="o">:=</span> <span class="s">"one-two-six"</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">part</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">SplitSeq</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">"-"</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">part</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><a href="https://tip.golang.org/pkg/strings#SplitAfterSeq"><code>SplitAfterSeq</code></a> returns an iterator over substrings of <code>s</code> split after each instance of <code>sep</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">s</span> <span class="o">:=</span> <span class="s">"one-two-six"</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">part</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">SplitAfterSeq</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">"-"</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">part</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><a href="https://tip.golang.org/pkg/strings#FieldsSeq"><code>FieldsSeq</code></a> returns an iterator over substrings of <code>s</code> split around runs of whitespace characters, as defined by <code>unicode.IsSpace</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">s</span> <span class="o">:=</span> <span class="s">"one two\nsix"</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">part</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">FieldsSeq</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">part</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><a href="https://tip.golang.org/pkg/strings#FieldsFuncSeq"><code>FieldsFuncSeq</code></a> returns an iterator over substrings of <code>s</code> split around runs of Unicode code points satisfying <code>f(c)</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">f</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">c</span> <span class="kt">rune</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">!</span><span class="nx">unicode</span><span class="p">.</span><span class="nf">IsLetter</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="p">!</span><span class="nx">unicode</span><span class="p">.</span><span class="nf">IsNumber</span><span class="p">(</span><span class="nx">c</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">s</span> <span class="o">:=</span> <span class="s">"one,two;six..."</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">part</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">FieldsFuncSeq</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="nx">f</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">part</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The same iterator functions were added to the <a href="https://tip.golang.org/pkg/bytes"><code>bytes</code></a> package.</p><p>𝗣 <a href="https://go.dev/issue/61901">61901</a> •
+𝗖𝗟 <a href="https://go.dev/cl/587095">587095</a></p><h2 id="sha-3-and-friends">SHA-3 and friends</h2><p>The new <a href="https://tip.golang.org/pkg/crypto/sha3"><code>crypto/sha3</code></a> package implements the SHA-3 hash function and SHAKE and cSHAKE extendable-output functions, as defined in <a href="http://doi.org/10.6028/NIST.FIPS.202">FIPS 202</a>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">s</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Source: %s\n"</span><span class="p">,</span> <span class="nx">s</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"SHA3-224: %x\n"</span><span class="p">,</span> <span class="nx">sha3</span><span class="p">.</span><span class="nf">Sum224</span><span class="p">(</span><span class="nx">s</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"SHA3-256: %x\n"</span><span class="p">,</span> <span class="nx">sha3</span><span class="p">.</span><span class="nf">Sum256</span><span class="p">(</span><span class="nx">s</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"SHA3-384: %x\n"</span><span class="p">,</span> <span class="nx">sha3</span><span class="p">.</span><span class="nf">Sum384</span><span class="p">(</span><span class="nx">s</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"SHA3-512: %x\n"</span><span class="p">,</span> <span class="nx">sha3</span><span class="p">.</span><span class="nf">Sum512</span><span class="p">(</span><span class="nx">s</span><span class="p">))</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>𝗣 <a href="https://go.dev/issue/69982">69982</a> • 𝗖𝗟 <a href="https://go.dev/cl/629176">629176</a></p><p>And two more <code>crypto</code> packages:</p><p><a href="https://tip.golang.org/pkg/crypto/hkdf/"><code>crypto/hkdf</code></a> package implements the HMAC-based Extract-and-Expand key derivation function HKDF, as defined in <a href="https://www.rfc-editor.org/rfc/rfc5869.html">RFC 5869</a>.</p><p>𝗣 <a href="https://go.dev/issue/61477">61477</a> • 𝗖𝗟 <a href="https://go.dev/cl/630296">630296</a></p><p><a href="https://tip.golang.org/pkg/crypto/pbkdf2/"><code>crypto/pbkdf2</code></a> package implements the password-based key derivation function PBKDF2, as defined in <a href="https://www.rfc-editor.org/rfc/rfc8018.html">RFC 8018</a>.</p><p>𝗣 <a href="https://go.dev/issue/69488">69488</a> • 𝗖𝗟 <a href="https://go.dev/cl/628135">628135</a></p><h2 id="http-protocols">HTTP protocols</h2><p>The new <a href="https://tip.golang.org/pkg/net/http#Server.Protocols"><code>Server.Protocols</code></a> and <a href="https://tip.golang.org/pkg/net/http#Transport.Protocols"><code>Transport.Protocols</code></a> fields in the <code>net/http</code> package provide a simple way to configure what HTTP protocols a server or client use:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">t</span> <span class="o">:=</span> <span class="nx">http</span><span class="p">.</span><span class="nx">DefaultTransport</span><span class="p">.(</span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Transport</span><span class="p">).</span><span class="nf">Clone</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Use either HTTP/1 or HTTP/2.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">t</span><span class="p">.</span><span class="nx">Protocols</span> <span class="p">=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Protocols</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">t</span><span class="p">.</span><span class="nx">Protocols</span><span class="p">.</span><span class="nf">SetHTTP1</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">t</span><span class="p">.</span><span class="nx">Protocols</span><span class="p">.</span><span class="nf">SetHTTP2</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">cli</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">{</span><span class="nx">Transport</span><span class="p">:</span> <span class="nx">t</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">res</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">cli</span><span class="p">.</span><span class="nf">Get</span><span class="p">(</span><span class="s">"http://httpbingo.org/status/200"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">res</span><span class="p">.</span><span class="nx">Body</span><span class="p">.</span><span class="nf">Close</span><span class="p">()</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The supported protocols are:</p><ul><li>HTTP1 is the HTTP/1.0 and HTTP/1.1 protocols. HTTP1 is supported on both unsecured TCP and secured TLS connections.</li><li>HTTP2 is the HTTP/2 protcol over a TLS connection.</li><li>UnencryptedHTTP2 is the HTTP/2 protocol over an unsecured TCP connection.</li></ul><p>𝗣 <a href="https://go.dev/issue/67814">67814</a> •
+𝗖𝗟 <a href="https://go.dev/cl/607496">607496</a></p><h2 id="omit-zero-values-in-json">Omit zero values in JSON</h2><p>The new <code>omitzero</code> option in the field tag instructs the JSON marshaler to omit zero values. It is clearer and less error-prone than <code>omitempty</code> when the intent is to omit zero values. Unlike <code>omitempty</code>, <code>omitzero</code> omits zero-valued <code>time.Time</code> values, a common source of friction.</p><p>Compare <code>omitempty</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span>      <span class="kt">string</span>    <span class="s">`json:"name"`</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">BirthDate</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span> <span class="s">`json:"birth_date,omitempty"`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">b</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>To <code>omitzero</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span>      <span class="kt">string</span>    <span class="s">`json:"name"`</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">BirthDate</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span> <span class="s">`json:"birth_date,omitzero"`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">b</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>If the field type has an <code>IsZero() bool</code> method, it will determine whether the value is zero. Otherwise, the value is zero if it is <a href="https://go.dev/ref/spec#The_zero_value">the zero value for its type</a>.</p><p>𝗣 <a href="https://go.dev/issue/45669">45669</a> •
+𝗖𝗟 <a href="https://go.dev/cl/615676">615676</a></p><h2 id="random-text">Random text</h2><p>The <a href="https://tip.golang.org/pkg/crypto/rand#Text"><code>crypto/rand.Text</code></a> function returns a cryptographically random string using the standard <a href="https://www.rfc-editor.org/rfc/rfc4648.html">Base32</a> alphabet:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">text</span> <span class="o">:=</span> <span class="nx">rand</span><span class="p">.</span><span class="nf">Text</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">text</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-1-24/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-1-24/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The result contains at least 128 bits of randomness, enough to prevent brute force guessing attacks and to make the likelihood of collisions vanishingly small.</p><p>𝗣 <a href="https://go.dev/issue/67057">67057</a> •
+𝗖𝗟 <a href="https://go.dev/cl/627477">627477</a></p><h2 id="tool-dependencies">Tool dependencies</h2><p>Go modules can now track executable dependencies using <code>tool</code> directives in <code>go.mod</code>.</p><p>To add a tool dependency, use <code>go get -tool</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">go mod init sandbox
+</span></span><span class="line"><span class="cl">go get -tool golang.org/x/tools/cmd/stringer
+</span></span></code></pre></div><p>This adds a <code>tool</code> dependency with a <code>require</code> directive to the <code>go.mod</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">module sandbox
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">go 1.24rc1
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">tool golang.org/x/tools/cmd/stringer
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">require (
+</span></span><span class="line"><span class="cl">    golang.org/x/mod v0.22.0 // indirect
+</span></span><span class="line"><span class="cl">    golang.org/x/sync v0.10.0 // indirect
+</span></span><span class="line"><span class="cl">    golang.org/x/tools v0.29.0 // indirect
+</span></span><span class="line"><span class="cl">)
+</span></span></code></pre></div><p>Tool dependencies remove the need for the previous workaround of adding tools as blank imports to a file conventionally named "tools.go". The <code>go tool</code> command can now run these tools in addition to tools shipped with the Go distribution:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">go tool stringer
+</span></span></code></pre></div><p>Refer to the <a href="https://go.dev/doc/modules/managing-dependencies#tools">documentation</a> for details.</p><p>𝗣 <a href="https://go.dev/issue/48429">48429</a></p><h2 id="json-output-for-build-install-and-test">JSON output for build, install and test</h2><p>The <code>go build</code>, <code>go install</code>, and <code>go test</code> commands now accept a <code>-json</code> flag that reports build output and failures as structured JSON on standard output.</p><p>For example, here is the <code>go test</code> output in default verbose mode:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">go <span class="nb">test</span> -v
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">=== RUN   TestSet_Add
+</span></span><span class="line"><span class="cl">--- PASS: TestSet_Add (0.00s)
+</span></span><span class="line"><span class="cl">=== RUN   TestSet_Contains
+</span></span><span class="line"><span class="cl">--- PASS: TestSet_Contains (0.00s)
+</span></span><span class="line"><span class="cl">PASS
+</span></span><span class="line"><span class="cl">ok      sandbox 0.934s
+</span></span></code></pre></div><p>And here is the <code>go test</code> output for the same program in JSON mode:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sh" data-lang="sh"><span class="line"><span class="cl">go <span class="nb">test</span> -json
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.280091+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"start"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671331+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"run"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Add"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671418+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"output"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Add"</span><span class="p">,</span><span class="nt">"Output"</span><span class="p">:</span><span class="s2">"=== RUN   TestSet_Add\n"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.67156+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"output"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Add"</span><span class="p">,</span><span class="nt">"Output"</span><span class="p">:</span><span class="s2">"--- PASS: TestSet_Add (0.00s)\n"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671579+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"pass"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Add"</span><span class="p">,</span><span class="nt">"Elapsed"</span><span class="p">:</span><span class="mi">0</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671601+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"run"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Contains"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671608+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"output"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Contains"</span><span class="p">,</span><span class="nt">"Output"</span><span class="p">:</span><span class="s2">"=== RUN   TestSet_Contains\n"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.67163+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"output"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Contains"</span><span class="p">,</span><span class="nt">"Output"</span><span class="p">:</span><span class="s2">"--- PASS: TestSet_Contains (0.00s)\n"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671638+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"pass"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Test"</span><span class="p">:</span><span class="s2">"TestSet_Contains"</span><span class="p">,</span><span class="nt">"Elapsed"</span><span class="p">:</span><span class="mi">0</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.671645+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"output"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Output"</span><span class="p">:</span><span class="s2">"PASS\n"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.672058+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"output"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Output"</span><span class="p">:</span><span class="s2">"ok  \tsandbox\t0.392s\n"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span><span class="nt">"Time"</span><span class="p">:</span><span class="s2">"2025-01-11T19:22:29.6721+05:00"</span><span class="p">,</span><span class="nt">"Action"</span><span class="p">:</span><span class="s2">"pass"</span><span class="p">,</span><span class="nt">"Package"</span><span class="p">:</span><span class="s2">"sandbox"</span><span class="p">,</span><span class="nt">"Elapsed"</span><span class="p">:</span><span class="mf">0.392</span><span class="p">}</span>
+</span></span></code></pre></div><p>There may also be non-JSON error text on standard error, even with the <code>-json</code> flag. Typically, this indicates an early, serious error.</p><p>For details of the JSON format, see <code>go help buildjson</code>.</p><p>𝗣 <a href="https://go.dev/issue/62067">62067</a></p><h2 id="main-modules-version">Main module's version</h2><p>The <code>go build</code> command now sets the main module's version (<code>BuildInfo.Main.Version</code>) in the compiled binary based on the version control system tag or commit. A <code>+dirty</code> suffix is added if there are uncommitted changes.</p><p>Here's a program that prints the version:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// get build information embedded in the running binary
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">info</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">debug</span><span class="p">.</span><span class="nf">ReadBuildInfo</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Go version:"</span><span class="p">,</span> <span class="nx">info</span><span class="p">.</span><span class="nx">GoVersion</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"App version:"</span><span class="p">,</span> <span class="nx">info</span><span class="p">.</span><span class="nx">Main</span><span class="p">.</span><span class="nx">Version</span><span class="p">)</span>
+</span></span></code></pre></div><p>Here's the output for Go 1.23:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Go version: go1.23.4
+</span></span><span class="line"><span class="cl">App version: (devel)
+</span></span></code></pre></div><p>Here's the output for Go 1.24:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">Go version: go1.24rc1
+</span></span><span class="line"><span class="cl">App version: v0.0.0-20250111143208-a7857c757b85+dirty
+</span></span></code></pre></div><p>When the current commit matches a tagged version, the value is set to <code>v&lt;tag&gt;[+dirty]</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">v1.2.4
+</span></span><span class="line"><span class="cl">v1.2.4+dirty
+</span></span></code></pre></div><p>When the current commit doesn't match a tagged version, the value is set to <code>&lt;pseudo&gt;[+dirty]</code>, where <code>pseudo</code> consists of the latest tag, current date, and commit:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">v1.2.3-0.20240620130020-daa7c0413123
+</span></span><span class="line"><span class="cl">v1.2.3-0.20240620130020-daa7c0413123+dirty
+</span></span></code></pre></div><p>When no VCS information is available, the value is set to <code>(devel)</code> (as in Go 1.23).</p><p>Use the <code>-buildvcs=false</code> flag to omit version control information from the binary.</p><p>𝗣 <a href="https://go.dev/issue/50603">50603</a></p><h2 id="summary">Summary</h2><p>Go 1.24 introduces many new features, including weak pointers, finalizers, and directory-scoped filesystem access. A lot of effort has gone into implementing faster maps, which is a very welcome change. Also, the Go team clearly prioritizes the developer experience, offering easier and safer ways to write benchmarks, test concurrent code, and use custom tools. And of course, cryptographic improvements like SHA-3 and random text generation are a nice touch.</p><p>All in all, a great release!</p><p>P.S. To catch up on other Go releases, check out the <a href="https://antonz.org/which-go/">Go features by version</a> list or explore the interactive tours for Go <a href="https://antonz.org/go-1-23/">1.23</a> and <a href="https://antonz.org/go-1-22/">1.22</a>.</p><p>P.P.S. Want to learn more about Go? Check out my interactive book on <a href="https://antonz.org/go-concurrency/">concurrency</a></p><script defer="" src="./Go 1.24 interactive tour_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-01-13 10:00:00 +0000 UTC">13 Jan, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/til/">TILs are junk food</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-map-shrink/">Go's map does not shrink</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/context/">Gist of Go: Context</a></p><p><a href="https://antonz.org/go-concurrency/time/">Gist of Go: Time</a></p><p><a href="https://antonz.org/go-concurrency/pipelines/">Gist of Go: Pipelines</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

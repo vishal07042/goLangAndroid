@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<!-- saved from url=(0045)https://antonz.org/go-concurrency/data-races/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Gist of Go: Data races</title>
+<meta name="description" content="Two goroutines racing for the same data is a recipe for disaster."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898015357&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-concurrency%2Fdata-races%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898015357&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Gist of Go_ Data races_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-concurrency/data-races/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Gist of Go: Data races"><meta property="og:description" content="Two goroutines racing for the same data is a recipe for disaster."><meta property="og:url" content="https://antonz.org/go-concurrency/data-races/"><meta property="og:image" content="https://antonz.org/go-concurrency/data-races/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Gist of Go: Data races"><meta name="twitter:description" content="Two goroutines racing for the same data is a recipe for disaster."><meta name="twitter:url" content="https://antonz.org/go-concurrency/data-races/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-concurrency/data-races/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Gist of Go_ Data races_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-concurrency/data-races/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Gist of Go: Data races</h1></header><p><em>This is a chapter from my book on <a href="https://antonz.org/go-concurrency">Go concurrency</a>, which teaches the topic from the ground up through interactive examples.</em></p><p>What happens if multiple goroutines modify the same data structure? Sadly, nothing good. Let's learn more about it.</p><div class="row"><div class="col-xs-12 col-sm-6 col-md-6"><ul><li><a href="https://antonz.org/go-concurrency/data-races/#concurrent-modification">Concurrent modification</a></li><li><a href="https://antonz.org/go-concurrency/data-races/#data-race">Data race</a></li><li><a href="https://antonz.org/go-concurrency/data-races/#sequential-modification">Sequential modification</a></li><li><a href="https://antonz.org/go-concurrency/data-races/#mutex">Mutex</a></li></ul></div><div class="col-xs-12 col-sm-6 col-md-6"><ul><li><a href="https://antonz.org/go-concurrency/data-races/#read-write-mutex">Read-write mutex</a></li><li><a href="https://antonz.org/go-concurrency/data-races/#channel-as-mutex">Channel as mutex</a></li><li><a href="https://antonz.org/go-concurrency/data-races/#keep-it-up">Keep it up</a></li></ul></div></div><h2 id="concurrent-modification">Concurrent modification</h2><p>So far, our goroutines haven't gotten in each other's way. They've used channels to exchange data, which is safe. But what happens if several goroutines try to access the same object at the same time? Let's find out.</p><p>Let's write a program that counts word frequencies:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// generate creates 100 words, each 3 letters long,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and sends them to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">in</span> <span class="o">:=</span> <span class="nf">generate</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count reads words from the input channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and counts how often each one appears.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">count</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="counter.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><details><summary>What is generate</summary><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// generate creates nWords words, each wordLen letters long,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// and sends them to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">generate</span><span class="p">(</span><span class="nx">nWords</span><span class="p">,</span> <span class="nx">wordLen</span> <span class="kt">int</span><span class="p">)</span> <span class="o">&lt;-</span><span class="kd">chan</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nb">close</span><span class="p">(</span><span class="nx">out</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">;</span> <span class="nx">nWords</span> <span class="p">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">nWords</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nf">randomWord</span><span class="p">(</span><span class="nx">wordLen</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">out</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// randomWord returns a random word with n letters.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">randomWord</span><span class="p">(</span><span class="nx">n</span> <span class="kt">int</span><span class="p">)</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">vowels</span> <span class="p">=</span> <span class="s">"eaiou"</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">const</span> <span class="nx">consonants</span> <span class="p">=</span> <span class="s">"rtnslcdpm"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">chars</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="nx">i</span> <span class="o">+=</span> <span class="mi">2</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">chars</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">consonants</span><span class="p">[</span><span class="nx">rand</span><span class="p">.</span><span class="nf">IntN</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="nx">consonants</span><span class="p">))]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">i</span> <span class="o">:=</span> <span class="mi">1</span><span class="p">;</span> <span class="nx">i</span> <span class="p">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="nx">i</span> <span class="o">+=</span> <span class="mi">2</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">chars</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span> <span class="p">=</span> <span class="nx">vowels</span><span class="p">[</span><span class="nx">rand</span><span class="p">.</span><span class="nf">IntN</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="nx">vowels</span><span class="p">))]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nb">string</span><span class="p">(</span><span class="nx">chars</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></details><p><code>generate()</code> generates words and sends them to the <code>in</code> channel. <code>main()</code> creates an empty map called <code>counter</code> and passes it to two <code>count()</code> goroutines. <code>count()</code> reads from the <code>in</code> channel and fills the map with word counts. In the end, <code>counter</code> should contain the frequency of each word.</p><p>Let's run it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">map[cec:1 ... nol:2 not:3 ... tut:1]
+</span></span></code></pre></div><p>And once again, just in case:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">fatal error: concurrent map writes
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">goroutine 1 [sync.WaitGroup.Wait]:
+</span></span><span class="line"><span class="cl">sync.runtime_SemacquireWaitGroup(0x140000021c0?)
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">goroutine 34 [chan send]:
+</span></span><span class="line"><span class="cl">main.generate.func1()
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">goroutine 35 [running]:
+</span></span><span class="line"><span class="cl">internal/runtime/maps.fatal({0x104b4039e?, 0x14000038a08?})
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">goroutine 36 [runnable]:
+</span></span><span class="line"><span class="cl">internal/runtime/maps.newTable(0x104b78340, 0x80, 0x0, 0x0)
+</span></span></code></pre></div><p>Panic!</p><p>Go doesn't let multiple goroutines write to a map at the same time. At first, this might seem odd. Here's the only operation that the <code>count()</code> goroutine does with the map:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span></code></pre></div><p>Looks like an atomic action. Why not perform it from multiple goroutines?</p><p>The problem is that the action only seems atomic. The operation "increase the key value in the map" actually involves several smaller steps. If one goroutine does some of these steps and another goroutine does the rest, the map can get messed up. That's what the runtime is warning us about.</p><h2 id="data-race">Data race</h2><p>When multiple goroutines access the same variable at the same time, and at least one of them changes it, it's called a <em>data race</em>. Concurrent map modification in the previous section is an example of a data race.</p><p>A data race doesn't always cause a runtime panic (the map example in the previous section is a nice exception: Go's map implementation has built-in runtime checks that can catch some data races). That's why Go provides a special tool called the <em>race detector</em>. You can turn it on with the <code>race</code> flag, which works with the <code>test</code>, <code>run</code>, <code>build</code>, and <code>install</code> commands.</p><blockquote><p>To use Go's race detector, you'll need to install <a href="https://gcc.gnu.org/wiki/InstallingGCC">gcc</a>, the C compiler.</p></blockquote><p>For example, take this program:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">total</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">total</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">total</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">total</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>At first glance, it seems to work correctly. But actually, it has a data race:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">go run -race race.go
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">==================
+</span></span><span class="line"><span class="cl">WARNING: DATA RACE
+</span></span><span class="line"><span class="cl">Read at 0x00c000112038 by goroutine 6:
+</span></span><span class="line"><span class="cl">  main.main.func1()
+</span></span><span class="line"><span class="cl">      race.go:16 +0x74
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Previous write at 0x00c000112038 by goroutine 7:
+</span></span><span class="line"><span class="cl">  main.main.func2()
+</span></span><span class="line"><span class="cl">      race.go:21 +0x84
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Goroutine 6 (running) created at:
+</span></span><span class="line"><span class="cl">  main.main()
+</span></span><span class="line"><span class="cl">      race.go:14 +0x104
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Goroutine 7 (finished) created at:
+</span></span><span class="line"><span class="cl">  main.main()
+</span></span><span class="line"><span class="cl">      race.go:19 +0x1a4
+</span></span><span class="line"><span class="cl">==================
+</span></span><span class="line"><span class="cl">2
+</span></span><span class="line"><span class="cl">Found 1 data race(s)
+</span></span></code></pre></div><blockquote><p>If you're wondering why a data race is a problem for a simple operation like <code>total++</code> — we'll cover it later in the chapter on atomic operations.</p></blockquote><p>Channels, on the other hand, are safe for concurrent reading and writing, and they don't cause data races:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">ch</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">ch</span> <span class="o">&lt;-</span> <span class="mi">1</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="o">&lt;-</span><span class="nx">ch</span> <span class="o">+</span> <span class="o">&lt;-</span><span class="nx">ch</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Data races are dangerous because they're hard to spot. Your program might work fine a hundred times, but on the hundred and first try, it could give the wrong result. Always check your code with a race detector.</p><div class="boxed"><p><strong>✎ Exercise: Spot the race</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="sequential-modification">Sequential modification</h2><p>You can often rewrite a program to avoid concurrent modifications. Here is a possible approach for our word frequency program:</p><ul><li>Each <code>count()</code> goroutine counts frequencies in its own map.</li><li>A separate <code>merge()</code> function goes through the frequency maps and builds the final map.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// generate creates 100 words, each 3 letters long,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and sends them to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">in</span> <span class="o">:=</span> <span class="nf">generate</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count reads words from the input channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and counts how often each one appears.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">count</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">counters</span> <span class="p">[]</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">,</span> <span class="nx">idx</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">counters</span><span class="p">[</span><span class="nx">idx</span><span class="p">]</span> <span class="p">=</span> <span class="nx">counter</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">counters</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="nx">counters</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="nx">counters</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// merge combines frequency maps.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">counter</span> <span class="o">:=</span> <span class="nf">merge</span><span class="p">(</span><span class="nx">counters</span><span class="o">...</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// merge combines frequency maps into a single map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">merge</span><span class="p">(</span><span class="nx">counters</span> <span class="o">...</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">merged</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">counter</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">counters</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">word</span><span class="p">,</span> <span class="nx">freq</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">merged</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span> <span class="o">+=</span> <span class="nx">freq</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">merged</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="counter.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Technically, we're still using shared data — the <code>counters</code> slice in <code>count()</code>. But the <code>idx</code> parameter makes sure the first <code>count()</code> only works with the first element of the slice, and the second one only works with the second element. Go allows this kind of concurrent slice access.</p><blockquote><p>It's important that multiple goroutines don't try to change the same element of the slice or call <code>append()</code>.</p></blockquote><p>Even if Go didn't allow concurrent access to slices, we could still solve the problem. We would just use a channel of maps instead of a slice:</p><ul><li>Each <code>count()</code> goroutine counts frequencies in its own map and sends it to a shared channel.</li><li>A separate <code>merge()</code> function in the <code>main</code> goroutine reads frequency maps from the shared channel and builds the final map.</li></ul><p>Either way, using a separate <code>merge()</code> step works, but it's not always convenient. Sometimes, we want to modify the same data from multiple goroutines. As is our right.</p><p>Let's see how we can do it.</p><h2 id="mutex">Mutex</h2><p>The <code>sync</code> package has a special tool called a <em>mutex</em>. It protects shared data and parts of your code (<em>critical sections</em>) from being accessed concurrently:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// generate creates 100 words, each 3 letters long,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and sends them to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">in</span> <span class="o">:=</span> <span class="nf">generate</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count reads words from the input channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and counts how often each one appears.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">count</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">lock</span> <span class="o">*</span><span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span><span class="p">,</span> <span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>       <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>     <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>       <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="counter.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The mutex guarantees that only one goroutine can run the code between <code>Lock()</code> and <code>Unlock()</code> at a time. Here's how it works:</p><ol><li>In ➊, we create a mutex and pass it to both <code>count()</code> goroutines.</li><li>In ➋, the first goroutine <em>locks</em> the mutex, then runs <code>counter[word]++</code>.</li><li>If the second goroutine reaches ➋ at this time, it will <em>block</em> because the mutex is locked.</li><li>In ➌, the first goroutine <em>unlocks</em> the mutex.</li><li>Now the second goroutine is <em>unblocked</em>. It then locks the mutex and runs <code>counter[word]++</code>.</li></ol><p>This way, <code>counter[word]++</code> can't be run by multiple goroutines at the same time. Now the map won't get corrupted:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">$ go run -race counter.go
+</span></span><span class="line"><span class="cl">map[cec:1 ... nol:2 not:3 ... tut:1]
+</span></span></code></pre></div><p>A mutex is used in these situations:</p><ul><li>When multiple goroutines are changing the same data.</li><li>When one goroutine is changing data and others are reading it.</li></ul><p>If all goroutines are only reading the data, you don't need a mutex.</p><p>Unlike some other languages, a mutex in Go is not reentrant. If a goroutine calls <code>Lock()</code> on a mutex it already holds, it will block itself:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// fatal error: all goroutines are asleep - deadlock!
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="counter.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>This makes things harder for people who like to use mutexes in recursive functions (which isn't a great idea anyway).</p><p>Like a wait group, a mutex has internal state, so you should only pass it as a pointer.</p><div class="boxed"><p><strong>✎ Exercise: Concurrent-safe counter</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="read-write-mutex">Read-write mutex</h2><p>A regular mutex doesn't distinguish between read and write access: if one goroutine locks the mutex, others can't access the protected code. This isn't always necessary.</p><p>Here's the situation:</p><ul><li>One <code>writer</code> goroutine writes data.</li><li>Four <code>reader</code> goroutines read that same data.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// writer fills in the word frequency map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">writer</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">,</span> <span class="nx">nWrites</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">;</span> <span class="nx">nWrites</span> <span class="p">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">nWrites</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">randomWord</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// reader looks up random words in the frequency map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">reader</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">,</span> <span class="nx">nReads</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">;</span> <span class="nx">nReads</span> <span class="p">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">nReads</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">randomWord</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">_</span> <span class="p">=</span> <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">writer</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Took"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Even though we started 4 reader goroutines, they run sequentially because of the mutex. This isn't really necessary. It makes sense for readers to wait while the writer is updating the map. But why can't the readers run in parallel? They're not changing any data.</p><p>The <code>sync</code> package includes a <code>sync.RWMutex</code> that separates readers and writers. It provides two sets of methods:</p><ul><li><code>Lock</code> / <code>Unlock</code> lock and unlock the mutex for both reading and writing.</li><li><code>RLock</code> / <code>RUnlock</code> lock and unlock the mutex for reading only.</li></ul><p>Here's how it works:</p><ul><li>If a goroutine locks the mutex with <code>Lock()</code>, other goroutines will be blocked if they try to use <code>Lock()</code> or <code>RLock()</code>.</li><li>If a goroutine locks the mutex with <code>RLock()</code>, other goroutines can also lock it with <code>RLock()</code> without being blocked.</li><li>If at least one goroutine has locked the mutex with <code>RLock()</code>, other goroutines will be blocked if they try to use <code>Lock()</code>.</li></ul><p>This creates a "single writer, multiple readers" setup. Let's verify it:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">RWMutex</span>          <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// writer fills in the word frequency map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">writer</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">,</span> <span class="nx">nWrites</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Not changed.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">;</span> <span class="nx">nWrites</span> <span class="p">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">nWrites</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">randomWord</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// reader looks up random words in the frequency map.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">reader</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">,</span> <span class="nx">nReads</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">;</span> <span class="nx">nReads</span> <span class="p">&gt;</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">nReads</span><span class="o">--</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">randomWord</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">RLock</span><span class="p">()</span>           <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">_</span> <span class="p">=</span> <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">lock</span><span class="p">.</span><span class="nf">RUnlock</span><span class="p">()</span>         <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">start</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Now</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">writer</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="k">go</span> <span class="nf">reader</span><span class="p">(</span><span class="nx">counter</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"Took"</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Since</span><span class="p">(</span><span class="nx">start</span><span class="p">))</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The mutex type ➊ has changed, so have the locking ➋ and unlocking ➌ methods in the reader. Now, readers run concurrently, but they always wait while the writer updates the map. That's exactly what we need!</p><div class="boxed"><p><strong>✎ Exercise: Counter with RWMutex</strong></p><p>Practice is crucial in turning abstract knowledge into skills, making theory alone insufficient. The full version of the book contains a lot of exercises — that's why I recommend <a href="https://antonz.gumroad.com/l/go-concurrency">getting it</a>.</p><p>If you are okay with just theory for now, let's continue.</p></div><h2 id="channel-as-mutex">Channel as mutex</h2><p>Let's go back to the program that counts word frequencies:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// generate creates 100 words, each 3 letters long,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and sends them to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">in</span> <span class="o">:=</span> <span class="nf">generate</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count reads words from the input channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and counts how often each one appears.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">count</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">lock</span> <span class="o">*</span><span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span><span class="p">,</span> <span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">lock</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>       <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">lock</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>     <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">lock</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>       <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>We created the <code>lock</code> mutex ➊ and used it to protect access to the shared <code>counter</code> map ➋ ➌. This way, the <code>count()</code> goroutines don't cause data races, and the final <code>counter[word]</code> value is correct.</p><p>We can also use a channel instead of a mutex to protect shared data:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">token</span> <span class="kd">struct</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// generate creates 100 words, each 3 letters long,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and sends them to the channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">in</span> <span class="o">:=</span> <span class="nf">generate</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count reads words from the input channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and counts how often each one appears.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">count</span> <span class="o">:=</span> <span class="kd">func</span><span class="p">(</span><span class="nx">lock</span> <span class="kd">chan</span> <span class="nx">token</span><span class="p">,</span> <span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">in</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">lock</span> <span class="o">&lt;-</span> <span class="nx">token</span><span class="p">{}</span>     <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">counter</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">            <span class="o">&lt;-</span><span class="nx">lock</span>              <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">lock</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">token</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counter</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">count</span><span class="p">(</span><span class="nx">lock</span><span class="p">,</span> <span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">counter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="counter.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/data-races/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/data-races/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We created a <code>lock</code> channel with a one-element buffer ➊ and used it to protect access to the shared <code>counter</code> map ➋ ➌.</p><p>Two <code>count()</code> goroutines run concurrently. However, in each loop iteration, only one of them can put a token into the <code>lock</code> channel (like locking a mutex), update the counter, and take the token back out (like unlocking a mutex). So, even though the goroutines run in parallel, changes to the map happen sequentially.</p><p>As a result, the <code>count()</code> goroutines don't cause data races, and the final <code>counter[word]</code> value is correct — just like when we used a mutex.</p><p>Go's channels are a versatile concurrency tool. Often, you can use a channel instead of lower-level synchronization primitives. Sometimes, using a channel is unnecessary, as in the example above. Other times, however, it makes your code simpler and helps prevent mistakes. You'll see this idea come up again throughout the book.</p><h2 id="keep-it-up">Keep it up</h2><p>Now you know how to safely change shared data from multiple goroutines using mutexes. Be careful not to overuse them — it's easy to make mistakes and cause data races or deadlocks.</p><p>In the next chapter, we'll talk about <a href="https://antonz.org/go-concurrency/race-conditions/">race conditions</a>.</p><p><a class="button" href="https://antonz.gumroad.com/l/go-concurrency">Buy for $25
+</a>&nbsp;
+or <a href="https://antonz.org/go-concurrency/">read online</a></p><script defer="" src="./Gist of Go_ Data races_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-06-08 17:00:00 +0000 UTC">08 Jun, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/default-transport/">Sad story of http.DefaultTransport</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-concurrency/race-conditions/">Gist of Go: Race conditions</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/default-transport/">Sad story of http.DefaultTransport</a></p><p><a href="https://antonz.org/go-map-shrink/">Go's map does not shrink</a></p><p><a href="https://antonz.org/go-1-24/">Go 1.24 interactive tour</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

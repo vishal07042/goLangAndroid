@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<!-- saved from url=(0030)https://antonz.org/go-json-v2/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>JSON evolution in Go: from v1 to v2</title>
+<meta name="description" content="Reviewing the key changes in json/v2."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898037935&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-json-v2%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898037935&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./JSON evolution in Go_ from v1 to v2_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-json-v2/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="JSON evolution in Go: from v1 to v2"><meta property="og:description" content="Reviewing the key changes in json/v2."><meta property="og:url" content="https://antonz.org/go-json-v2/"><meta property="og:image" content="https://antonz.org/go-json-v2/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="JSON evolution in Go: from v1 to v2"><meta name="twitter:description" content="Reviewing the key changes in json/v2."><meta name="twitter:url" content="https://antonz.org/go-json-v2/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-json-v2/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./JSON evolution in Go_ from v1 to v2_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-json-v2/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>JSON evolution in Go: from v1 to v2</h1></header><p>The <a href="https://pkg.go.dev/encoding/json/v2">second version</a> of the <code>json</code> package coming in Go 1.25 is a big update, and it has a lot of breaking changes. The v2 package adds new features, fixes API issues and behavioral flaws, and boosts performance. Let's take a look at what's changed!</p><blockquote><p>All examples are interactive, so you can read and practice at the same time.</p></blockquote><p>The basic use case with <code>Marshal</code> and <code>Unmarshal</code> stays the same. This code works in both v1 and v2:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Age</span>  <span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-person" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Marshal Alice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">b</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Unmarshal Alice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">err</span> <span class="p">=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">b</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">alice</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>But the rest is pretty different. Let's go over the main changes from v1.</p><p><a href="https://antonz.org/go-json-v2/#marshalwrite-and-unmarshalread">Write/Read</a> •
+<a href="https://antonz.org/go-json-v2/#marshalencode-and-unmarshaldecode">Encode/Decode</a> •
+<a href="https://antonz.org/go-json-v2/#options">Options</a> •
+<a href="https://antonz.org/go-json-v2/#tags">Tags</a> •
+<a href="https://antonz.org/go-json-v2/#custom-marshaling">Custom marshaling</a> •
+<a href="https://antonz.org/go-json-v2/#default-behavior">Default behavior</a> •
+<a href="https://antonz.org/go-json-v2/#performance">Performance</a> •
+<a href="https://antonz.org/go-json-v2/#final-thoughts">Final thoughts</a></p><h2 id="marshalwrite-and-unmarshalread">MarshalWrite and UnmarshalRead</h2><p>In v1, you used <code>Encoder</code> to marshal to the <code>io.Writer</code>, and <code>Decoder</code> to unmarshal from the <code>io.Reader</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Marshal Alice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">out</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">Builder</span><span class="p">)</span> <span class="c1">// io.Writer
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">enc</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">out</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">enc</span><span class="p">.</span><span class="nf">Encode</span><span class="p">(</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">out</span><span class="p">.</span><span class="nf">String</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Unmarshal Bob.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">in</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">NewReader</span><span class="p">(</span><span class="s">`{"Name":"Bob","Age":30}`</span><span class="p">)</span> <span class="c1">// io.Reader
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">dec</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">NewDecoder</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">bob</span> <span class="nx">Person</span>
+</span></span><span class="line"><span class="cl"><span class="nx">dec</span><span class="p">.</span><span class="nf">Decode</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">bob</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">bob</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="jsonv1.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><blockquote><p>From now on, I'll leave out error handling to keep things simple.</p></blockquote><p>In v2, you can use <code>MarshalWrite</code> and <code>UnmarshalRead</code> directly, without any intermediaries:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Marshal Alice.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">out</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">Builder</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">json</span><span class="p">.</span><span class="nf">MarshalWrite</span><span class="p">(</span><span class="nx">out</span><span class="p">,</span> <span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">out</span><span class="p">.</span><span class="nf">String</span><span class="p">())</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Unmarshal Bob.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">in</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">NewReader</span><span class="p">(</span><span class="s">`{"Name":"Bob","Age":30}`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">bob</span> <span class="nx">Person</span>
+</span></span><span class="line"><span class="cl"><span class="nx">json</span><span class="p">.</span><span class="nf">UnmarshalRead</span><span class="p">(</span><span class="nx">in</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">bob</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">bob</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>They're not interchangeable, though:</p><ul><li><code>MarshalWrite</code> does not add a newline, unlike the old <code>Encoder.Encode</code>.</li><li><code>UnmarshalRead</code> reads everything from the reader until it hits <code>io.EOF</code>, while the old <code>Decoder.Decode</code> only reads the next JSON value.</li></ul><h2 id="marshalencode-and-unmarshaldecode">MarshalEncode and UnmarshalDecode</h2><p>The <code>Encoder</code> and <code>Decoder</code> types have been moved to the new <a href="https://pkg.go.dev/encoding/json/jsontext"><code>jsontext</code></a> package, and their interfaces have changed significantly (to support low-level streaming encode/decode operations).</p><p>You can use them with <code>json</code> functions to read and write JSON streams, similar to how <code>Encode</code> and <code>Decode</code> worked before:</p><ul><li>v1 <code>Encoder.Encode</code> → v2 <code>json.MarshalEncode</code> + <code>jsontext.Encoder</code>.</li><li>v1 <code>Decoder.Decode</code> → v2 <code>json.UnmarshalDecode</code> + <code>jsontext.Decoder</code>.</li></ul><p>Streaming encoder:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">people</span> <span class="o">:=</span> <span class="p">[]</span><span class="nx">Person</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">25</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Bob"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">30</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Cindy"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">15</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">out</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">strings</span><span class="p">.</span><span class="nx">Builder</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">enc</span> <span class="o">:=</span> <span class="nx">jsontext</span><span class="p">.</span><span class="nf">NewEncoder</span><span class="p">(</span><span class="nx">out</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">p</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">people</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">json</span><span class="p">.</span><span class="nf">MarshalEncode</span><span class="p">(</span><span class="nx">enc</span><span class="p">,</span> <span class="nx">p</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Print</span><span class="p">(</span><span class="nx">out</span><span class="p">.</span><span class="nf">String</span><span class="p">())</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Streaming decoder:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">in</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">NewReader</span><span class="p">(</span><span class="s">`
+</span></span></span><span class="line"><span class="cl"><span class="s">    {"Name":"Alice","Age":25}
+</span></span></span><span class="line"><span class="cl"><span class="s">    {"Name":"Bob","Age":30}
+</span></span></span><span class="line"><span class="cl"><span class="s">    {"Name":"Cindy","Age":15}
+</span></span></span><span class="line"><span class="cl"><span class="s">`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">dec</span> <span class="o">:=</span> <span class="nx">jsontext</span><span class="p">.</span><span class="nf">NewDecoder</span><span class="p">(</span><span class="nx">in</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">p</span> <span class="nx">Person</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Decodes one Person object per call.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">UnmarshalDecode</span><span class="p">(</span><span class="nx">dec</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">p</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">io</span><span class="p">.</span><span class="nx">EOF</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">p</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Unlike <code>UnmarshalRead</code>, <code>UnmarshalDecode</code> works in a fully streaming way, decoding one value at a time with each call, instead of reading everything until <code>io.EOF</code>.</p><h2 id="options">Options</h2><p>Options configure marshaling and unmarshaling functions with specific features:</p><ul><li><code>FormatNilMapAsNull</code> and <code>FormatNilSliceAsNull</code> define how to encode nil maps and slices.</li><li><code>MatchCaseInsensitiveNames</code> allows matching <code>Name</code> ↔ <code>name</code> and the like.</li><li><code>Multiline</code> expands JSON objects to multiple lines.</li><li><code>OmitZeroStructFields</code> omits fields with zero values from the output.</li><li><code>SpaceAfterColon</code> and <code>SpaceAfterComma</code> add a space after each <code>:</code> or <code>,</code></li><li><code>StringifyNumbers</code> represents numeric types as strings.</li><li><code>WithIndent</code> and <code>WithIndentPrefix</code> indent nested properties (note that the <code>MarshalIndent</code> function has been removed).</li></ul><p>Each marshaling or unmarshaling function can take any number of options:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">b</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">alice</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">json</span><span class="p">.</span><span class="nf">OmitZeroStructFields</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">json</span><span class="p">.</span><span class="nf">StringifyNumbers</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">jsontext</span><span class="p">.</span><span class="nf">WithIndent</span><span class="p">(</span><span class="s">"  "</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">))</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>You can also combine options with <code>JoinOptions</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span><span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span> <span class="nx">Age</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">opts</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">JoinOptions</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">jsontext</span><span class="p">.</span><span class="nf">SpaceAfterColon</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">jsontext</span><span class="p">.</span><span class="nf">SpaceAfterComma</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">b</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">alice</span><span class="p">,</span> <span class="nx">opts</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">))</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-person" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>See the complete list of options in the documentation: some are in the <a href="https://pkg.go.dev/encoding/json/v2#Options"><code>json</code></a> package, others are in the <a href="https://pkg.go.dev/encoding/json/jsontext#Options"><code>jsontext</code></a> package.</p><h2 id="tags">Tags</h2><p>v2 supports field tags defined in v1:</p><ul><li><code>omitzero</code> and <code>omitempty</code> to omit empty values.</li><li><code>string</code> to represent numeric types as strings.</li><li><code>-</code> to ignore fields.</li></ul><p>And adds some more:</p><ul><li><code>case:ignore</code> or <code>case:strict</code> specify how to handle case differences.</li><li><code>format:template</code> formats the field value according to the template.</li><li><code>inline</code> flattens the output by promoting the fields of a nested object up to the parent.</li><li><code>unknown</code> provides a "catch-all" for the unknown fields.</li></ul><p>Here's an example demonstrating <code>inline</code> and <code>format</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span> <span class="kt">string</span>         <span class="s">`json:"name"`</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Format date as yyyy-mm-dd.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">BirthDate</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Time</span> <span class="s">`json:"birth_date,format:DateOnly"`</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Inline address fields into the Person object.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">Address</span>             <span class="s">`json:",inline"`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Address</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Street</span> <span class="kt">string</span> <span class="s">`json:"street"`</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">City</span>   <span class="kt">string</span> <span class="s">`json:"city"`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Name</span><span class="p">:</span> <span class="s">"Alice"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">BirthDate</span><span class="p">:</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Date</span><span class="p">(</span><span class="mi">2001</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="mi">43</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">UTC</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Address</span><span class="p">:</span> <span class="nx">Address</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">Street</span><span class="p">:</span> <span class="s">"123 Main St"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">City</span><span class="p">:</span>   <span class="s">"Wonderland"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">alice</span><span class="p">,</span> <span class="nx">jsontext</span><span class="p">.</span><span class="nf">WithIndent</span><span class="p">(</span><span class="s">"  "</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>And <code>unknown</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span> <span class="kt">string</span>         <span class="s">`json:"name"`</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Collect all unknown Person fields
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// into the Data field.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">Data</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">any</span> <span class="s">`json:",unknown"`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">src</span> <span class="o">:=</span> <span class="s">`{
+</span></span></span><span class="line"><span class="cl"><span class="s">        "name": "Alice",
+</span></span></span><span class="line"><span class="cl"><span class="s">        "hobby": "adventure",
+</span></span></span><span class="line"><span class="cl"><span class="s">        "friends": [
+</span></span></span><span class="line"><span class="cl"><span class="s">            {"name": "Bob"},
+</span></span></span><span class="line"><span class="cl"><span class="s">            {"name": "Cindy"}
+</span></span></span><span class="line"><span class="cl"><span class="s">        ]
+</span></span></span><span class="line"><span class="cl"><span class="s">    }`</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">alice</span> <span class="nx">Person</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="nx">src</span><span class="p">),</span> <span class="o">&amp;</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><h2 id="custom-marshaling">Custom marshaling</h2><p>The basic use case for custom marshaling using <code>Marshaler</code> and <code>Unmarshaler</code> interfaces stays the same. This code works in both v1 and v2:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// A custom boolean type represented
+</span></span></span><span class="line"><span class="cl"><span class="c1">// as "✓" for true and "✗" for false.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Success</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="nx">Success</span><span class="p">)</span> <span class="nf">MarshalJSON</span><span class="p">()</span> <span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">s</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✓"`</span><span class="p">),</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✗"`</span><span class="p">),</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Success</span><span class="p">)</span> <span class="nf">UnmarshalJSON</span><span class="p">(</span><span class="nx">data</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Data validation omitted for brevity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="o">*</span><span class="nx">s</span> <span class="p">=</span> <span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span> <span class="o">==</span> <span class="s">`"✓"`</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Marshaling.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">val</span> <span class="o">:=</span> <span class="nf">Success</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Unmarshaling.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">src</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✓"`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="p">=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">src</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>However, the Go standard library documentation recommends using the new <code>MarshalerTo</code> and <code>UnmarshalerFrom</code> interfaces instead (they work in a purely streaming way, which can be much faster):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// A custom boolean type represented
+</span></span></span><span class="line"><span class="cl"><span class="c1">// as "✓" for true and "✗" for false.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">Success</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="nx">Success</span><span class="p">)</span> <span class="nf">MarshalJSONTo</span><span class="p">(</span><span class="nx">enc</span> <span class="o">*</span><span class="nx">jsontext</span><span class="p">.</span><span class="nx">Encoder</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">s</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">WriteToken</span><span class="p">(</span><span class="nx">jsontext</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="s">"✓"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">WriteToken</span><span class="p">(</span><span class="nx">jsontext</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="s">"✗"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="p">(</span><span class="nx">s</span> <span class="o">*</span><span class="nx">Success</span><span class="p">)</span> <span class="nf">UnmarshalJSONFrom</span><span class="p">(</span><span class="nx">dec</span> <span class="o">*</span><span class="nx">jsontext</span><span class="p">.</span><span class="nx">Decoder</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Data validation omitted for brevity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">tok</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dec</span><span class="p">.</span><span class="nf">ReadToken</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="o">*</span><span class="nx">s</span> <span class="p">=</span> <span class="nx">tok</span><span class="p">.</span><span class="nf">String</span><span class="p">()</span> <span class="o">==</span> <span class="s">`✓`</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">err</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Marshaling.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">val</span> <span class="o">:=</span> <span class="nf">Success</span><span class="p">(</span><span class="kc">true</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Unmarshaling.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">src</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✓"`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="p">=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">src</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">val</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Even better, you're no longer limited to just one way of marshaling a specific type. Now you can use custom marshalers and unmarshalers whenever you need, with the generic <code>MarshalFunc</code> and <code>UnmarshalFunc</code> functions.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nx">MarshalFunc</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">(</span><span class="nx">T</span><span class="p">)</span> <span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="kt">error</span><span class="p">))</span> <span class="o">*</span><span class="nx">Marshalers</span>
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nx">UnmarshalFunc</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="nx">T</span><span class="p">)</span> <span class="kt">error</span><span class="p">)</span> <span class="o">*</span><span class="nx">Unmarshalers</span>
+</span></span></code></pre></div><p>For example, you can marshal a <code>bool</code> value to <code>✓</code> or <code>✗</code> without creating a custom type:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Custom marshaler for bool values.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">boolMarshaler</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">MarshalFunc</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">func</span><span class="p">(</span><span class="nx">val</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">val</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✓"`</span><span class="p">),</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✗"`</span><span class="p">),</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Pass the custom marshaler to Marshal
+</span></span></span><span class="line"><span class="cl"><span class="c1">// using the WithMarshalers option.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">val</span> <span class="o">:=</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl"><span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">json</span><span class="p">.</span><span class="nf">WithMarshalers</span><span class="p">(</span><span class="nx">boolMarshaler</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>And unmarshal <code>✓</code> or <code>✗</code> to <code>bool</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Custom unmarshaler for bool values.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">boolUnmarshaler</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">UnmarshalFunc</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">func</span><span class="p">(</span><span class="nx">data</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">,</span> <span class="nx">val</span> <span class="o">*</span><span class="kt">bool</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="o">*</span><span class="nx">val</span> <span class="p">=</span> <span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span> <span class="o">==</span> <span class="s">`"✓"`</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="kc">nil</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Pass the custom unmarshaler to Unmarshal
+</span></span></span><span class="line"><span class="cl"><span class="c1">// using the WithUnmarshalers option.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">src</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`"✓"`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="kd">var</span> <span class="nx">val</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl"><span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">src</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">val</span><span class="p">,</span> <span class="nx">json</span><span class="p">.</span><span class="nf">WithUnmarshalers</span><span class="p">(</span><span class="nx">boolUnmarshaler</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">val</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>There are also <code>MarshalToFunc</code> and <code>UnmarshalFromFunc</code> functions for creating custom marshalers. They're similar to <code>MarshalFunc</code> and <code>UnmarshalFunc</code>, but they work with <code>jsontext.Encoder</code> and <code>jsontext.Decoder</code> instead of byte slices.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nx">MarshalToFunc</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">(</span><span class="o">*</span><span class="nx">jsontext</span><span class="p">.</span><span class="nx">Encoder</span><span class="p">,</span> <span class="nx">T</span><span class="p">)</span> <span class="kt">error</span><span class="p">)</span> <span class="o">*</span><span class="nx">Marshalers</span>
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nx">UnmarshalFromFunc</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">fn</span> <span class="kd">func</span><span class="p">(</span><span class="o">*</span><span class="nx">jsontext</span><span class="p">.</span><span class="nx">Decoder</span><span class="p">,</span> <span class="nx">T</span><span class="p">)</span> <span class="kt">error</span><span class="p">)</span> <span class="o">*</span><span class="nx">Unmarshalers</span>
+</span></span></code></pre></div><p>You can combine marshalers using <code>JoinMarshalers</code> (and unmarshalers using <code>JoinUnmarshalers</code>). For example, here's how you can marshal both booleans (<code>true</code>/<code>false</code>) and "boolean-like" strings (<code>on</code>/<code>off</code>) to <code>✓</code> or <code>✗</code>, while keeping the default marshaling for all other values.</p><p>First we define a custom marshaler for bool values:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Marshals boolean values to ✓ or ✗..
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">boolMarshaler</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">MarshalToFunc</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">func</span><span class="p">(</span><span class="nx">enc</span> <span class="o">*</span><span class="nx">jsontext</span><span class="p">.</span><span class="nx">Encoder</span><span class="p">,</span> <span class="nx">val</span> <span class="kt">bool</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">val</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">WriteToken</span><span class="p">(</span><span class="nx">jsontext</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="s">"✓"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">WriteToken</span><span class="p">(</span><span class="nx">jsontext</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="s">"✗"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet id="s-marshaler-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Then we define a custom marshaler for bool-like strings:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Marshals boolean-like strings to ✓ or ✗.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">strMarshaler</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">MarshalToFunc</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">func</span><span class="p">(</span><span class="nx">enc</span> <span class="o">*</span><span class="nx">jsontext</span><span class="p">.</span><span class="nx">Encoder</span><span class="p">,</span> <span class="nx">val</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">val</span> <span class="o">==</span> <span class="s">"on"</span> <span class="o">||</span> <span class="nx">val</span> <span class="o">==</span> <span class="s">"true"</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">WriteToken</span><span class="p">(</span><span class="nx">jsontext</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="s">"✓"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">val</span> <span class="o">==</span> <span class="s">"off"</span> <span class="o">||</span> <span class="nx">val</span> <span class="o">==</span> <span class="s">"false"</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">return</span> <span class="nx">enc</span><span class="p">.</span><span class="nf">WriteToken</span><span class="p">(</span><span class="nx">jsontext</span><span class="p">.</span><span class="nf">String</span><span class="p">(</span><span class="s">"✗"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// SkipFunc is a special type of error that tells Go to skip
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// the current marshaler and move on to the next one. In our case,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// the next one will be the default marshaler for strings.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">return</span> <span class="nx">json</span><span class="p">.</span><span class="nx">SkipFunc</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet id="s-marshaler-2" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Finally, we combine marshalers with <code>JoinMarshalers</code> and pass them to the marshaling function using the <code>WithMarshalers</code> option:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// Combine custom marshalers with JoinMarshalers.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">marshalers</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">JoinMarshalers</span><span class="p">(</span><span class="nx">boolMarshaler</span><span class="p">,</span> <span class="nx">strMarshaler</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// Marshal some values.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="nx">vals</span> <span class="o">:=</span> <span class="p">[]</span><span class="nx">any</span><span class="p">{</span><span class="kc">true</span><span class="p">,</span> <span class="s">"off"</span><span class="p">,</span> <span class="s">"hello"</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="nx">data</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">vals</span><span class="p">,</span> <span class="nx">json</span><span class="p">.</span><span class="nf">WithMarshalers</span><span class="p">(</span><span class="nx">marshalers</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">data</span><span class="p">),</span> <span class="nx">err</span><span class="p">)</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-marshaler-1 s-marshaler-2" template="main.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Isn't that cool?</p><h2 id="default-behavior">Default behavior</h2><p>v2 changes not only the package interface, but the default marshaling/unmarshaling behavior as well.</p><p>Some notable <strong>marshaling differences</strong> include:</p><ul><li>v1 marshals a nil slice to <code>null</code>, v2 marshals to <code>[]</code>. You can change it with the <code>FormatNilSliceAsNull</code> option.</li><li>v1 marshals a nil map to <code>null</code>, v2 marshals to <code>{}</code>. You can change it with the <code>FormatNilMapAsNull</code> option.</li><li>v1 marshals a byte array to an array of numbers, v2 marshals to a base64-encoded string. You can change it with <code>format:array</code> and <code>format:base64</code> tags.</li><li>v1 allows invalid UTF-8 characters within a string, v2 does not. You can change it with the <code>AllowInvalidUTF8</code> option.</li></ul><p>Here's an example of the default v2 behavior:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span>    <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Hobbies</span> <span class="p">[]</span><span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Skills</span>  <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Secret</span>  <span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="kt">byte</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Name</span><span class="p">:</span>    <span class="s">"Alice"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Secret</span><span class="p">:</span> <span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="kt">byte</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span><span class="nx">alice</span><span class="p">,</span> <span class="nx">jsontext</span><span class="p">.</span><span class="nf">Multiline</span><span class="p">(</span><span class="kc">true</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>And here's how you can enforce v1 behavior:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Name</span>    <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Hobbies</span> <span class="p">[]</span><span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Skills</span>  <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">Secret</span>  <span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="kt">byte</span> <span class="s">`json:",format:array"`</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">alice</span> <span class="o">:=</span> <span class="nx">Person</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Name</span><span class="p">:</span>    <span class="s">"Alice"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Secret</span><span class="p">:</span> <span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="kt">byte</span><span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Marshal</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">alice</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">json</span><span class="p">.</span><span class="nf">FormatNilMapAsNull</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">json</span><span class="p">.</span><span class="nf">FormatNilSliceAsNull</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">jsontext</span><span class="p">.</span><span class="nf">Multiline</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">b</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Some notable <strong>unmarshaling differences</strong> include:</p><ul><li>v1 uses case-insensitive field name matching, v2 uses an exact, case-sensitive match. You can change it with the <code>MatchCaseInsensitiveNames</code> option or <code>case</code> tag.</li><li>v1 allows duplicate fields in a object, v2 does not. You can change it with the <code>AllowDuplicateNames</code> option.</li></ul><p>Here's an example of the default v2 behavior (case-sensitive):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">FirstName</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">LastName</span>  <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">src</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`{"firstname":"Alice","lastname":"Zakas"}`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">alice</span> <span class="nx">Person</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">src</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%+v\n"</span><span class="p">,</span> <span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>And here's how you can enforce v1 behavior (case-insensitive):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">Person</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">FirstName</span> <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">LastName</span>  <span class="kt">string</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">src</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">`{"firstname":"Alice","lastname":"Zakas"}`</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">alice</span> <span class="nx">Person</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">src</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">alice</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">json</span><span class="p">.</span><span class="nf">MatchCaseInsensitiveNames</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"%+v\n"</span><span class="p">,</span> <span class="nx">alice</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-json-v2/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-json-v2/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>See the complete list of behavioral changes in the <a href="https://pkg.go.dev/encoding/json@master#hdr-Migrating_to_v2">documentation</a>.</p><h2 id="performance">Performance</h2><p>When marshaling, v2 performs about the same as v1. It's faster with some datasets, but slower with others. However, unmarshaling is <em>much</em> better: v2 is 2.7x to 10.2x faster than v1.</p><p>Also, you can get significant performance benefits by switching from regular <code>MarshalJSON</code> and <code>UnmarshalJSON</code> to their streaming alternatives — <code>MarshalJSONTo</code> and <code>UnmarshalJSONFrom</code>. According to the Go team, it allows to convert certain O(n²) runtime scenarios into O(n). For example, switching from <code>UnmarshalJSON</code> to <code>UnmarshalJSONFrom</code> in the k8s OpenAPI spec made it about <a href="https://github.com/kubernetes/kube-openapi/issues/315#issuecomment-1240030015">40&nbsp;times faster</a>.</p><p>See the <a href="https://github.com/go-json-experiment/jsonbench#readme">jsonbench</a> repo for benchmark details.</p><h2 id="final-thoughts">Final thoughts</h2><p>Phew! That's a lot to take in. The v2 package has more features and is more flexible than v1, but it's also a lot more complex, especially given the split into <code>json/v2</code> and <code>jsontext</code> subpackages.</p><p>A couple of things to keep in mind:</p><ul><li>As of Go 1.25, the <code>json/v2</code> package is experimental and can be enabled by setting <code>GOEXPERIMENT=jsonv2</code> at build time. The package API is subject to change in future releases.</li><li>Turning on <code>GOEXPERIMENT=jsonv2</code> makes the v1 <code>json</code> package use the new JSON implementation, which is faster and supports some options for better compatibility with the old marshaling and unmarshaling behavior.</li></ul><p>Finally, here are some links to learn more about the v2 design and implementation:</p><p><a href="https://go.dev/issue/63397">proposal p.1</a> •
+<a href="https://go.dev/issue/71497">proposal p.2</a> •
+<a href="https://github.com/golang/go/tree/master/src/encoding/json/v2">json/v2</a> •
+<a href="https://github.com/golang/go/tree/master/src/encoding/json/jsontext">jsontext</a></p><p>P.S. Want to learn more about Go? Check out my interactive book on <a href="https://antonz.org/go-concurrency/">concurrency</a></p><script defer="" src="./JSON evolution in Go_ from v1 to v2_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-06-22 13:30:00 +0000 UTC">22 Jun, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-concurrency/race-conditions/">Gist of Go: Race conditions</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-1-25/">Go 1.25 interactive tour</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/race-conditions/">Gist of Go: Race conditions</a></p><p><a href="https://antonz.org/go-concurrency/data-races/">Gist of Go: Data races</a></p><p><a href="https://antonz.org/default-transport/">Sad story of http.DefaultTransport</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<!-- saved from url=(0045)https://antonz.org/go-concurrency/goroutines/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Gist of Go: Goroutines</title>
+<meta name="description" content="Let&#39;s write a concurrent program in Go!"><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897097456&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fgo-concurrency%2Fgoroutines%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785897097456&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Gist of Go_ Goroutines_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/go-concurrency/goroutines/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Gist of Go: Goroutines"><meta property="og:description" content="Let&#39;s write a concurrent program in Go!"><meta property="og:url" content="https://antonz.org/go-concurrency/goroutines/"><meta property="og:image" content="https://antonz.org/go-concurrency/goroutines/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Gist of Go: Goroutines"><meta name="twitter:description" content="Let&#39;s write a concurrent program in Go!"><meta name="twitter:url" content="https://antonz.org/go-concurrency/goroutines/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/go-concurrency/goroutines/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Gist of Go_ Goroutines_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/go-concurrency/goroutines/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post longread" data-namespace="goconc"><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Gist of Go: Goroutines</h1></header><p><em>This is a chapter from my book on <a href="https://antonz.org/go-concurrency">Go concurrency</a>, which teaches the topic from the ground up through interactive examples.</em></p><p>Let's skip the long talk about concurrency and parallelism and jump right into writing a concurrent program in Go!</p><div class="row"><div class="col-xs-12 col-sm-6 col-md-5"><ul><li><a href="https://antonz.org/go-concurrency/goroutines/#go-routine">Go-routine</a></li><li><a href="https://antonz.org/go-concurrency/goroutines/#dependent-and-independent-goroutines">Dependent goroutines</a></li><li><a href="https://antonz.org/go-concurrency/goroutines/#-counting-digits-in-words">Counting digits</a>&nbsp;✎</li><li><a href="https://antonz.org/go-concurrency/goroutines/#channels">Channels</a></li><li><a href="https://antonz.org/go-concurrency/goroutines/#-result-channel">Result channel</a>&nbsp;✎</li><li><a href="https://antonz.org/go-concurrency/goroutines/#generator">Generator</a></li></ul></div><div class="col-xs-12 col-sm-6 col-md-5"><ul><li><a href="https://antonz.org/go-concurrency/goroutines/#-generator-with-goroutines">Generator+goroutines</a>&nbsp;✎</li><li><a href="https://antonz.org/go-concurrency/goroutines/#-reader-and-worker">Reader/worker</a>&nbsp;✎</li><li><a href="https://antonz.org/go-concurrency/goroutines/#-named-goroutines">Named goroutines</a>&nbsp;✎</li><li><a href="https://antonz.org/go-concurrency/goroutines/#output-channel">Output channel</a></li><li><a href="https://antonz.org/go-concurrency/goroutines/#keep-it-up">Keep it up</a></li></ul></div></div><h2 id="go-routine">Go-routine</h2><p>Suppose we have a function that speaks a phrase word by word with some pauses:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// say prints each word of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Simon says: %s...\n"</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-say" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We call it from the main function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">say</span><span class="p">(</span><span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-say" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now let's create two talkers, each saying their own phrase:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// say prints each word of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">id</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker #%d says: %s...\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-say-id" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Run the program:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">say</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">say</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s">"cats are cute"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-say-id" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Not bad, but the functions speak one after the other. To make them speak at the same time, let's add <code>go</code> before calling the <code>say()</code> function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s">"cats are cute"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">500</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-say-id" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now they really compete for our attention! When we write <code>go f()</code>, the function <code>f()</code> runs independently of the others.</p><blockquote><p>If you're familiar with concurrency in Python, JavaScript, or other languages with async/await, don't try to apply that experience to Go. Go has a very different approach to concurrency. Try to look at it with fresh eyes.</p></blockquote><p>Functions that run with <code>go</code> are called <em>goroutines</em>. The Go runtime juggles these goroutines and distributes them among operating system threads running on CPU cores. Compared to OS threads, goroutines are lightweight, so you can create hundreds or thousands of them.</p><p>You may be wondering why we need <code>time.Sleep()</code> in the <code>main</code> function. Let's clarify that.</p><h2 id="dependent-and-independent-goroutines">Dependent and independent goroutines</h2><p>Goroutines are completely independent. When we call <code>go say()</code>, the function runs on its own. <code>main</code> doesn't wait for it. So if we write <code>main</code> like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s">"cats are cute"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>— the program won't print anything. <code>main</code> finishes before our goroutines speak, and since the main is done, the whole program terminates.</p><p>The main function is also a goroutine, but it starts implicitly when the program starts. So we have three goroutines: <code>main</code>, <code>say(1)</code>, and <code>say(2)</code>, all of which are independent. The only catch is that when <code>main</code> ends, everything else ends too.</p><h3 id="wait-group">Wait group</h3><p>Using <code>time.Sleep()</code> to wait for goroutines is a bad idea because we can't predict how long they will take. A better approach is to use a <em>wait group</em>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span> <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>             <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">wg</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>             <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="nf">say</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">wg</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">"cats are cute"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>             <span class="c1">// (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// say prints each word of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">say</span><span class="p">(</span><span class="nx">wg</span> <span class="o">*</span><span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span><span class="p">,</span> <span class="nx">id</span> <span class="kt">int</span><span class="p">,</span> <span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Printf</span><span class="p">(</span><span class="s">"Worker #%d says: %s...\n"</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">dur</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Duration</span><span class="p">(</span><span class="nx">rand</span><span class="p">.</span><span class="nf">Intn</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="nx">dur</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>             <span class="c1">// (4)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p><code>wg</code> ➊ has a counter inside. Calling <code>wg.Add(1)</code> ➋ increments it by one, while <code>wg.Done()</code> ➍ decrements it. <code>wg.Wait()</code> ➌ blocks the goroutine (in this case, <code>main</code>) until the counter reaches zero. This way, <code>main</code> waits for <code>say(1)</code> and <code>say(2)</code> to finish before it exits.</p><p>However, this approach mixes business logic (<code>say</code>) with concurrency logic (<code>wg</code>). As a result, we can't easily run <code>say</code> in regular, non-concurrent code.</p><p>In Go, it's common to separate concurrency logic from business logic. This is usually done with separate functions. In simple cases like ours, even anonymous functions will do:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">say</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">say</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s">"cats are cute"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-say-id" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Here's how it works:</p><ul><li>We know there will be two goroutines, so we call <code>wg.Add(2)</code> right away. Alternatively, we can call <code>wg.Add(1)</code> before starting each goroutine — the result will be the same.</li><li>Anonymous functions are started with <code>go</code> just like regular ones.</li><li><code>defer wg.Done()</code> ensures the goroutine decrements the counter before exiting, even if <code>say</code> panics.</li><li><code>say</code> itself knows nothing about concurrency and just runs happily.</li></ul><h3 id="waitgroupgo">WaitGroup.Go</h3><p>The <code>WaitGroup.Go</code> method (Go 1.25+) automatically increments the wait group counter, runs a function in a goroutine, and decrements the counter when it's done. This means we can rewrite the example above without using <code>wg.Add()</code> and <code>wg.Done()</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"go is awesome"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"cats are cute"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">})</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"done"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The implementation uses <code>Add</code> and <code>Done</code> just like we did before:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// https://github.com/golang/go/blob/master/src/sync/waitgroup.go
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="p">(</span><span class="nx">wg</span> <span class="o">*</span><span class="nx">WaitGroup</span><span class="p">)</span> <span class="nf">Go</span><span class="p">(</span><span class="nx">f</span> <span class="kd">func</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">defer</span> <span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nf">f</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>I'll use both <code>Go</code> and <code>Add</code>+<code>Done</code> throughout the book, depending on the situation.</p><h2 id="-counting-digits-in-words">✎ Counting digits in words</h2><p><em>The ✎ symbol indicates exercises. They are an essential part of the book, so try not to skip them. Half of what you learn comes from the exercises.</em></p><p>Here's a function that counts the digits in a word:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// countDigits returns the number of digits in a string.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">str</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">int</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">count</span> <span class="o">:=</span> <span class="mi">0</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">char</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">str</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">unicode</span><span class="p">.</span><span class="nf">IsDigit</span><span class="p">(</span><span class="nx">char</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">count</span><span class="o">++</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">count</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Create a function <code>countDigitsInWords</code> that takes an input string, splits it into words, and counts the digits in each word using <code>countDigits</code>. Be sure to do the counting for each word in a separate goroutine.</p><p>We haven't discussed how to modify shared data from different goroutines yet, so there is a ready-to-use variable called <code>syncStats</code> that you can safely access from goroutines.</p><p><strong>Important</strong>: When submitting your solution, send only the code fragment marked with "solution start" and "solution end" comments. The full source code is available via the "Playground" link below.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// solution start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in the words of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">syncStats</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">sync</span><span class="p">.</span><span class="nx">Map</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Count the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// using a separate goroutine for each word.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// To store the results of the count,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// use syncStats.Store(word, count)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// As a result, syncStats should contain words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and the number of digits in each.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">asStats</span><span class="p">(</span><span class="nx">syncStats</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// solution end
+</span></span></span></code></pre></div><codapi-snippet id="ex01" sandbox="go" editor="basic" template="ex01/main.go" actions="⛶_Playground:@playground ↻_Reset:@reset ☉_Toggle_solution:@solution" data-playground="https://go.dev/play/p/CPI22QZfmE3" state="unknown" initialcode="// solution start
+
+// countDigitsInWords counts the number of digits in the words of a phrase.
+func countDigitsInWords(phrase string) counter {
+    var wg sync.WaitGroup
+    syncStats := new(sync.Map)
+    words := strings.Fields(phrase)
+
+    // Count the number of digits in words,
+    // using a separate goroutine for each word.
+
+    // To store the results of the count,
+    // use syncStats.Store(word, count)
+
+    // As a result, syncStats should contain words
+    // and the number of digits in each.
+
+    return asStats(syncStats)
+}
+
+// solution end">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<a href="https://antonz.org/go-concurrency/goroutines/#playground">⛶ Playground</a><a href="https://antonz.org/go-concurrency/goroutines/#reset">↻ Reset</a><a href="https://antonz.org/go-concurrency/goroutines/#solution">☉ Toggle solution</a><codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div id="ex01-solution" class="boxed" hidden=""><p><strong>✓ Counting digits in words</strong></p><p>Here's what we do:</p><ul><li>For each word, start a new goroutine with <code>wg.Go()</code>.</li><li>Inside the goroutine, count the digits and store the results in <code>syncStats</code>.</li><li>Wait for all goroutines to finish with <code>wg.Wait()</code>.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">syncStats</span> <span class="o">:=</span> <span class="nb">new</span><span class="p">(</span><span class="nx">sync</span><span class="p">.</span><span class="nx">Map</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">wg</span><span class="p">.</span><span class="nf">Go</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">syncStats</span><span class="p">.</span><span class="nf">Store</span><span class="p">(</span><span class="nx">word</span><span class="p">,</span> <span class="nx">count</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">})</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">asStats</span><span class="p">(</span><span class="nx">syncStats</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></div><h2 id="channels">Channels</h2><p>Starting a bunch of goroutines is great, but how do they exchange data? In Go, goroutines can pass values to each other through <em>channels</em>. A channel is like a window where one goroutine can throw something and another can catch it.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">┌─────────────┐    ┌─────────────┐
+</span></span><span class="line"><span class="cl">│ goroutine A │    │ goroutine B │
+</span></span><span class="line"><span class="cl">│             └────┘             │
+</span></span><span class="line"><span class="cl">│        X &lt;-  chan  &lt;- X        │
+</span></span><span class="line"><span class="cl">│             ┌────┐             │
+</span></span><span class="line"><span class="cl">│             │    │             │
+</span></span><span class="line"><span class="cl">└─────────────┘    └─────────────┘
+</span></span></code></pre></div><p><em>Goroutine B sends value X to goroutine A. Canvas, oil, circa 2024.</em></p><p>Here's how it works:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// To create a channel, use `make(chan type)`.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// Channel can only accept values of the specified type:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">messages</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// To send a value to a channel,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// use the `channel &lt;-` syntax.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// Let's send "ping":
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span> <span class="nx">messages</span> <span class="o">&lt;-</span> <span class="s">"ping"</span> <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// To receive a value from a channel,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// use the `&lt;-channel` syntax.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// Let's receive "ping" and print it:
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">msg</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">messages</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="nx">msg</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>When the program runs, the first goroutine (anonymous) sends a message to the second (<code>main</code>) through the <code>messages</code> channel.</p><p>Sending a value through a channel is a synchronous operation. When the sending goroutine writes a value to the channel (<code>messages &lt;- "ping"</code>), it blocks and waits for someone to receive that value (<code>&lt;-messages</code>). Only then does it continue:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">messages</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"B: Sending message..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">messages</span> <span class="o">&lt;-</span> <span class="s">"ping"</span>                    <span class="c1">// (1)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"B: Message sent!"</span><span class="p">)</span>       <span class="c1">// (2)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"A: Doing some work..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">500</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"A: Ready to receive a message..."</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="o">&lt;-</span><span class="nx">messages</span>                               <span class="c1">//  (3)
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="nx">fmt</span><span class="p">.</span><span class="nf">Println</span><span class="p">(</span><span class="s">"A: Messege received!"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">time</span><span class="p">.</span><span class="nf">Sleep</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="nx">time</span><span class="p">.</span><span class="nx">Millisecond</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="header.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>After sending the message to the channel ➊, goroutine B gets blocked. Only when goroutine A receives the message ➌ does goroutine B continue and print "message sent" ➋.</p><p>So, channels not only transfer data, but also help to synchronize independent goroutines. This will come in handy later.</p><h2 id="-result-channel">✎ Result channel</h2><p>We often see the "producer-consumer" pattern in programming:</p><ul><li>The producer supplies data.</li><li>The consumer receives and processes it.</li></ul><p>In this and the following exercises, we'll explore how producers and consumers can interact through channels.</p><p>We are working with a function that counts digits in words:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// counter stores the number of digits in each word.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// The key is the word, and the value is the number of digits.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits
+</span></span></span><span class="line"><span class="cl"><span class="c1">// in the words of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Do the following:</p><ul><li>Start a goroutine.</li><li>In this goroutine, loop through the words, count the digits in each, and write to the <code>counted</code> channel (producer).</li><li>In the outer function, read values from the channel and fill the <code>stats</code> counter (consumer).</li></ul><p>In this and following exercises, don't use wait groups. We won't need them for quite a while.</p><p>Submit only the code fragment marked with "solution start" and "solution end" comments. The full source code is available via the "Playground" link below.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// solution start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in the words of a phrase.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Loop through the words,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// count the number of digits in each,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// and write it to the counted channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Read values from the counted channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and fill stats.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// As a result, stats should contain words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and the number of digits in each.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// solution end
+</span></span></span></code></pre></div><codapi-snippet id="ex02" sandbox="go" editor="basic" template="ex02/main.go" actions="⛶_Playground:@playground ↻_Reset:@reset ☉_Toggle_solution:@solution" data-playground="https://go.dev/play/p/nHLVqccfTld" state="unknown" initialcode="// solution start
+
+// countDigitsInWords counts the number of digits in the words of a phrase.
+func countDigitsInWords(phrase string) counter {
+    words := strings.Fields(phrase)
+    counted := make(chan int)
+
+    go func() {
+        // Loop through the words,
+        // count the number of digits in each,
+        // and write it to the counted channel.
+    }()
+
+    // Read values from the counted channel
+    // and fill stats.
+
+    // As a result, stats should contain words
+    // and the number of digits in each.
+
+    return stats
+}
+
+// solution end">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<a href="https://antonz.org/go-concurrency/goroutines/#playground">⛶ Playground</a><a href="https://antonz.org/go-concurrency/goroutines/#reset">↻ Reset</a><a href="https://antonz.org/go-concurrency/goroutines/#solution">☉ Toggle solution</a><codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div id="ex02-solution" class="boxed" hidden=""><p><strong>✓ Result channel</strong></p><p>Here's what we do:</p><ul><li>In the goroutine, loop through the words, count the digits in each, and write to the <code>counted</code> channel.</li><li>In the outer function, loop through the words, read the counts from the <code>counted</code> channel, and fill in the <code>stats</code>.</li></ul><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">phrase</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">words</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Fields</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count digits in words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">counted</span> <span class="o">&lt;-</span> <span class="nx">count</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// fill stats by words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">stats</span> <span class="o">:=</span> <span class="nx">counter</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">word</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">words</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">count</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">counted</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stats</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span> <span class="p">=</span> <span class="nx">count</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></div><blockquote><p>If you've worked with concurrency in Go, the solutions in this chapter may seem a bit... unorthodox, if not clunky. It's designed this way to avoid overwhelming readers who are new to concurrency. In a few chapters, we'll cover the core concepts, and the code will start to look idiomatic.</p></blockquote><h2 id="generator">Generator</h2><p>So far, we've assumed that the <code>countDigitsInWords</code> function knows all the words in advance.</p><p>But we can't expect that luxury in real life. Data can come from a database or over the network, and the function has no idea how many words there will be.</p><p>Let's simulate this situation by passing a generator function <code>next</code> instead of a phrase. Each call to <code>next()</code> gives us the next word from the source. When there are no more words, it returns an empty string.</p><p>A sequential program would look like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// counter stores the number of digits in each word.
+</span></span></span><span class="line"><span class="cl"><span class="c1">// The key is the word, and the value is the number of digits.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">counter</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stats</span> <span class="o">:=</span> <span class="nx">counter</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">next</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stats</span><span class="p">[</span><span class="nx">word</span><span class="p">]</span> <span class="p">=</span> <span class="nx">count</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrase</span> <span class="o">:=</span> <span class="s">"0ne 1wo thr33 4068"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">next</span> <span class="o">:=</span> <span class="nf">wordGenerator</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stats</span> <span class="o">:=</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printStats</span><span class="p">(</span><span class="nx">stats</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" template="count.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now let's add some concurrency.</p><h2 id="-generator-with-goroutines">✎ Generator with goroutines</h2><p>We are working with a function that counts digits in words:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Do the following:</p><ul><li>Start a goroutine.</li><li>In this goroutine, fetch words from the generator, count the digits in each, and write to the <code>counted</code> channel.</li><li>In the outer function, read values from the channel and fill <code>stats</code>.</li></ul><p>If you try to solve the exercise like the previous one, you'll run into a couple of problems:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">int</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count digits in words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="c1">// should return when
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="c1">// there are no more words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>            <span class="nx">word</span> <span class="o">:=</span> <span class="nf">next</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">counted</span> <span class="o">&lt;-</span> <span class="nx">count</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// fill stats by words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">stats</span> <span class="o">:=</span> <span class="nx">counter</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">count</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">counted</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// how to break from the loop
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// when there are no more words?
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="k">if</span> <span class="o">...</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// where should the word come from?
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="nx">stats</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="p">=</span> <span class="nx">count</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Think about <em>what</em> to send to the <code>counted</code> channel to solve both problems. Note the <code>pair</code> type.</p><p>Submit only the code fragment marked with "solution start" and "solution end" comments. The full source code is available via the "Playground" link below.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// solution start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="o">...</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Fetch words from the generator,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// count the number of digits in each,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// and write it to the counted channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Read values from the counted channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and fill stats.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// As a result, stats should contain words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and the number of digits in each.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// solution end
+</span></span></span></code></pre></div><codapi-snippet id="ex03" sandbox="go" editor="basic" template="ex03/main.go" actions="⛶_Playground:@playground ↻_Reset:@reset ☉_Toggle_solution:@solution" data-playground="https://go.dev/play/p/OlNyCKJgL_S" state="unknown" initialcode="// solution start
+
+// countDigitsInWords counts the number of digits in words,
+// fetching the next word with next().
+func countDigitsInWords(next func() string) counter {
+    counted := make(chan ...)
+
+    go func() {
+        // Fetch words from the generator,
+        // count the number of digits in each,
+        // and write it to the counted channel.
+    }()
+
+    // Read values from the counted channel
+    // and fill stats.
+
+    // As a result, stats should contain words
+    // and the number of digits in each.
+
+    return stats
+}
+
+// solution end">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<a href="https://antonz.org/go-concurrency/goroutines/#playground">⛶ Playground</a><a href="https://antonz.org/go-concurrency/goroutines/#reset">↻ Reset</a><a href="https://antonz.org/go-concurrency/goroutines/#solution">☉ Toggle solution</a><codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div id="ex03-solution" class="boxed" hidden=""><p><strong>✓ Generator with goroutines</strong></p><p>Declare a <code>pair</code> type (word + count):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">type</span> <span class="nx">pair</span> <span class="kd">struct</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">word</span>  <span class="kt">string</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">count</span> <span class="kt">int</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Create a channel of the appropriate type:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>In the goroutine, count the digits for each word and send the (word, count) pairs to the <code>counted</code> channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// count digits in words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">word</span> <span class="o">:=</span> <span class="nf">next</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">counted</span> <span class="o">&lt;-</span> <span class="nx">pair</span><span class="p">{</span><span class="nx">word</span><span class="p">,</span> <span class="nx">count</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="k">break</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>In the outer function, read the pairs from the channel and fill <code>stats</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// count digits in words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// fill stats by words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">stats</span> <span class="o">:=</span> <span class="nx">counter</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">p</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">counted</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">p</span><span class="p">.</span><span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stats</span><span class="p">[</span><span class="nx">p</span><span class="p">.</span><span class="nx">word</span><span class="p">]</span> <span class="p">=</span> <span class="nx">p</span><span class="p">.</span><span class="nx">count</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>That's it!</p></div><h2 id="-reader-and-worker">✎ Reader and worker</h2><p>We are working with a function that counts digits in words:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>In the previous exercise, the goroutine went through the words and counted the digits, while the outer function received the counts and updated the counter:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">┌───────────────┐
+</span></span><span class="line"><span class="cl">│ loops through │               ┌────────────────┐
+</span></span><span class="line"><span class="cl">│ words and     │ → (counted) → │ fills stats    │
+</span></span><span class="line"><span class="cl">│ counts digits │               └────────────────┘
+</span></span><span class="line"><span class="cl">└───────────────┘
+</span></span><span class="line"><span class="cl">  goroutine          channel      outer function
+</span></span></code></pre></div><p>For more complex tasks, it's useful to have a goroutine for reading data (<em>reader</em>) and another for processing data (<em>worker</em>). Let's use this approach in our function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">┌───────────────┐               ┌───────────────┐
+</span></span><span class="line"><span class="cl">│ sends words   │               │ counts digits │               ┌────────────────┐
+</span></span><span class="line"><span class="cl">│ to be counted │ → (pending) → │ in words      │ → (counted) → │ fills stats    │
+</span></span><span class="line"><span class="cl">│               │               │               │               └────────────────┘
+</span></span><span class="line"><span class="cl">└───────────────┘               └───────────────┘
+</span></span><span class="line"><span class="cl">  reader             channel      worker             channel      outer function
+</span></span></code></pre></div><p>Do the following:</p><ul><li>Start a goroutine that fetches words from the generator and sends them to the <code>pending</code> channel (reader).</li><li>Start a second goroutine that reads from <code>pending</code>, counts the digits, and writes to the <code>counted</code> channel (worker).</li><li>In the outer function, read from <code>counted</code> and update the final <code>stats</code> counter.</li></ul><p>Submit only the code fragment marked with "solution start" and "solution end" comments. The full source code is available via the "Playground" link below.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// solution start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pending</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// sends words to be counted
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Fetch words from the generator
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// and send them to the pending channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// counts digits in words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// Read the words from the pending channel,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// count the number of digits in each word,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>        <span class="c1">// and send the results to the counted channel.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Read values from the counted channel
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and fill stats.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// As a result, stats should contain words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// and the number of digits in each.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// solution end
+</span></span></span></code></pre></div><codapi-snippet id="ex04" sandbox="go" editor="basic" template="ex04/main.go" actions="⛶_Playground:@playground ↻_Reset:@reset ☉_Toggle_solution:@solution" data-playground="https://go.dev/play/p/QWwMuRZbxtx" state="unknown" initialcode="// solution start
+
+// countDigitsInWords counts the number of digits in words,
+// fetching the next word with next().
+func countDigitsInWords(next func() string) counter {
+    pending := make(chan string)
+    counted := make(chan pair)
+
+    // sends words to be counted
+    go func() {
+        // Fetch words from the generator
+        // and send them to the pending channel.
+    }()
+
+    // counts digits in words
+    go func() {
+        // Read the words from the pending channel,
+        // count the number of digits in each word,
+        // and send the results to the counted channel.
+    }()
+
+    // Read values from the counted channel
+    // and fill stats.
+
+    // As a result, stats should contain words
+    // and the number of digits in each.
+
+    return stats
+}
+
+// solution end">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<a href="https://antonz.org/go-concurrency/goroutines/#playground">⛶ Playground</a><a href="https://antonz.org/go-concurrency/goroutines/#reset">↻ Reset</a><a href="https://antonz.org/go-concurrency/goroutines/#solution">☉ Toggle solution</a><codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div id="ex04-solution" class="boxed" hidden=""><p><strong>✓ Reader and worker</strong></p><p>The reader goroutine fetches words from the generator and sends them to the <code>pending</code> channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">next</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">pending</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span></code></pre></div><p>The worker goroutine reads words from the <code>pending</code> channel, counts digits, and sends the results to the <code>counted</code> channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">pending</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">counted</span> <span class="o">&lt;-</span> <span class="nx">pair</span><span class="p">{</span><span class="nx">word</span><span class="p">,</span> <span class="nx">count</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}()</span>
+</span></span></code></pre></div><p>The outer function reads from the <code>counted</code> channel and prepares the final results:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="nx">stats</span> <span class="o">:=</span> <span class="nx">counter</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">p</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">counted</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">p</span><span class="p">.</span><span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">break</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stats</span><span class="p">[</span><span class="nx">p</span><span class="p">.</span><span class="nx">word</span><span class="p">]</span> <span class="p">=</span> <span class="nx">p</span><span class="p">.</span><span class="nx">count</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></div><h2 id="-named-goroutines">✎ Named goroutines</h2><p>We are working with a function that counts digits in words:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>After splitting the logic between the reader and the worker, the function became quite hefty:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// sends words to be counted
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// counts digits in words
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// fills stats
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>There are clearly three logical blocks:</p><ol><li>Send words to be counted.</li><li>Count digits in words.</li><li>Fill in the final results.</li></ol><p>It would be convenient to extract these blocks into separate functions that exchange data through channels:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pending</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">submitWords</span><span class="p">(</span><span class="nx">next</span><span class="p">,</span> <span class="nx">pending</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">countWords</span><span class="p">(</span><span class="nx">pending</span><span class="p">,</span> <span class="nx">counted</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">fillStats</span><span class="p">(</span><span class="nx">counted</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Refactor the program to achieve this.</p><p>Submit only the code fragment marked with "solution start" and "solution end" comments. The full source code is available via the "Playground" link below.</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// solution start
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// submitWords sends words to be counted.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// countWords counts digits in words.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// fillStats prepares the final statistics.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl"><span class="c1">// solution end
+</span></span></span></code></pre></div><codapi-snippet id="ex05" sandbox="go" editor="basic" template="ex05/main.go" actions="⛶_Playground:@playground ↻_Reset:@reset ☉_Toggle_solution:@solution" data-playground="https://go.dev/play/p/cN-AGmemUAF" state="unknown" initialcode="// solution start
+
+// submitWords sends words to be counted.
+
+// countWords counts digits in words.
+
+// fillStats prepares the final statistics.
+
+// solution end">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<a href="https://antonz.org/go-concurrency/goroutines/#playground">⛶ Playground</a><a href="https://antonz.org/go-concurrency/goroutines/#reset">↻ Reset</a><a href="https://antonz.org/go-concurrency/goroutines/#solution">☉ Toggle solution</a><codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><div id="ex05-solution" class="boxed" hidden=""><p><strong>✓ Named goroutines</strong></p><p><code>submitWords()</code> fills the input channel with words from the <code>next</code> function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">submitWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">out</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="nf">next</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>countWords()</code> reads data from the input channel, counts digits, and writes results to the output channel:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countWords</span><span class="p">(</span><span class="nx">in</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">,</span> <span class="nx">out</span> <span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nx">pair</span><span class="p">{</span><span class="nx">word</span><span class="p">,</span> <span class="nx">count</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>fillStats()</code> reads from the result channel and prepares the final statistics:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">fillStats</span><span class="p">(</span><span class="nx">in</span> <span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stats</span> <span class="o">:=</span> <span class="nx">counter</span><span class="p">{}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">p</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">p</span><span class="p">.</span><span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="k">break</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">stats</span><span class="p">[</span><span class="nx">p</span><span class="p">.</span><span class="nx">word</span><span class="p">]</span> <span class="p">=</span> <span class="nx">p</span><span class="p">.</span><span class="nx">count</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">stats</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div></div><h2 id="output-channel">Output channel</h2><p>Here is the function we ended up with:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// countDigitsInWords counts the number of digits in words,
+</span></span></span><span class="line"><span class="cl"><span class="c1">// fetching the next word with next().
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pending</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">submitWords</span><span class="p">(</span><span class="nx">next</span><span class="p">,</span> <span class="nx">pending</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="nf">countWords</span><span class="p">(</span><span class="nx">pending</span><span class="p">,</span> <span class="nx">counted</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">fillStats</span><span class="p">(</span><span class="nx">counted</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>It looks fine, but there's still one thing we might change.</p><p>The <code>pending</code> channel is created in the parent function only to be passed to the child <code>submitWords</code> function. It'd be better to create the channel in <code>submitWords</code> and return it to the parent, so that <code>submitWords</code> owns it completely. The same goes for the <code>counted</code> channel and <code>countWords</code>.</p><p>Then <code>countDigitsInWords</code> will look like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="nx">counter</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">pending</span> <span class="o">:=</span> <span class="nf">submitWords</span><span class="p">(</span><span class="nx">next</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">counted</span> <span class="o">:=</span> <span class="nf">countWords</span><span class="p">(</span><span class="nx">pending</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nf">fillStats</span><span class="p">(</span><span class="nx">counted</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Now the ownership is clear, and the program is easier to reason about. But where did all the goroutines go? We start them inside <code>submitWords</code> and <code>countWords</code> like this:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// submitWords sends words to be counted.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">submitWords</span><span class="p">(</span><span class="nx">next</span> <span class="kd">func</span><span class="p">()</span> <span class="kt">string</span><span class="p">)</span> <span class="kd">chan</span> <span class="kt">string</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">word</span> <span class="o">:=</span> <span class="nf">next</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nx">word</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="k">break</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">out</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// countWords counts digits in words.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">countWords</span><span class="p">(</span><span class="nx">in</span> <span class="kd">chan</span> <span class="kt">string</span><span class="p">)</span> <span class="kd">chan</span> <span class="nx">pair</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">out</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">pair</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">for</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">word</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">in</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">count</span> <span class="o">:=</span> <span class="nf">countDigits</span><span class="p">(</span><span class="nx">word</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">out</span> <span class="o">&lt;-</span> <span class="nx">pair</span><span class="p">{</span><span class="nx">word</span><span class="p">,</span> <span class="nx">count</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">            <span class="k">if</span> <span class="nx">word</span> <span class="o">==</span> <span class="s">""</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">                <span class="k">break</span>
+</span></span><span class="line"><span class="cl">            <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="nx">out</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-output" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Let's make sure the program still works as expected:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">phrase</span> <span class="o">:=</span> <span class="s">"0ne 1wo thr33 4068"</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">next</span> <span class="o">:=</span> <span class="nf">wordGenerator</span><span class="p">(</span><span class="nx">phrase</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">stats</span> <span class="o">:=</span> <span class="nf">countDigitsInWords</span><span class="p">(</span><span class="nx">next</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">printStats</span><span class="p">(</span><span class="nx">stats</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" editor="basic" depends-on="s-output" template="output.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/go-concurrency/goroutines/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/go-concurrency/goroutines/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><blockquote><p>This approach has a downside: <code>submitWords</code> and <code>countWords</code> are now more complex and start goroutines. On the other hand, <code>countDigitsInWords</code> is simpler and more robust (especially if we make the channels directed, which we'll discuss later in the book). Which option you choose depends on your preferences, but you definitely shouldn't mix the two methods.</p></blockquote><p>Returning an output channel from a function and filling it within an internal goroutine is a common pattern in Go.</p><h2 id="keep-it-up">Keep it up</h2><p>We learned about goroutines and channels in Go. There is still a long way to go, but we've made a start! In the next chapter we'll dive into <a href="https://antonz.org/go-concurrency/channels/">channels</a>.</p><p><a class="button" href="https://antonz.gumroad.com/l/go-concurrency">Buy for $25
+</a>&nbsp;
+or <a href="https://antonz.org/go-concurrency/">read online</a></p><script defer="" src="./Gist of Go_ Goroutines_files/snippet.js.download"></script><script defer="" src="./Gist of Go_ Goroutines_files/exercise.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2024-07-30 11:00:00 +0000 UTC">30 Jul, 2024</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/go-concurrency/">Gist of Go: Concurrency</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-concurrency/wait-groups/">Gist of Go: Wait groups</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/go-concurrency/">Gist of Go: Concurrency</a></p><p><a href="https://antonz.org/which-go/">Go features by version</a></p><p><a href="https://antonz.org/go-1-23/">Go 1.23 interactive tour</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>

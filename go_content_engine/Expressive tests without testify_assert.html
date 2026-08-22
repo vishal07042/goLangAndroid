@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<!-- saved from url=(0034)https://antonz.org/do-not-testify/ -->
+<html lang="en" data-theme="dark"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Expressive tests without testify/assert</title>
+<meta name="description" content="Equal, Err and True are quite enough."><meta name="robots" content="index, follow"><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898094720&amp;type=content-script&amp;dmn=antonz.org&amp;url=https%3A%2F%2Fantonz.org%2Fdo-not-testify%2F&amp;app=msedge.exe&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=0"></script><script type="text/javascript" nonce="f1b21ddfbc66491db187c4a502f" src="https://injections.adguard.org/?ts=1785898094720&amp;name=LeetCode%20Enforcer&amp;type=user-script"></script><link rel="stylesheet" type="text/css" href="./Expressive tests without testify_assert_files/style.f659ba253b5081ad0d88e3ba5fb6d17d10e34332fb95ae98afbc578940ba721e.css"><link rel="icon" href="https://antonz.org/assets/favicon/favicon.ico" sizes="any"><link rel="icon" type="image/svg+xml" href="https://antonz.org/assets/favicon/favicon.svg"><link rel="apple-touch-icon" href="https://antonz.org/assets/favicon/apple-touch-icon.png"><link rel="manifest" href="https://antonz.org/assets/favicon/manifest.json"><link rel="canonical" href="https://antonz.org/do-not-testify/"><meta name="author" content="Anton Zhiyanov"><meta property="og:type" content="article"><meta property="og:title" content="Expressive tests without testify/assert"><meta property="og:description" content="Equal, Err and True are quite enough."><meta property="og:url" content="https://antonz.org/do-not-testify/"><meta property="og:image" content="https://antonz.org/do-not-testify/cover.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Expressive tests without testify/assert"><meta name="twitter:description" content="Equal, Err and True are quite enough."><meta name="twitter:url" content="https://antonz.org/do-not-testify/"><meta name="twitter:site" content="@ohmypy"><meta name="twitter:image" content="https://antonz.org/do-not-testify/cover.png"></head><body><div class="header"><div class="container"><div class="row"><div class="col-xs-6 col-sm-3"><a class="img-link" href="https://antonz.org/"><img src="./Expressive tests without testify_assert_files/logo.svg" class="header-icon">
+</a>&nbsp;
+<a href="https://antonz.org/"><strong>Anton Zhiyanov</strong></a></div><div class="col-xs-12 col-sm-6 col-md-4 hidden-mobile"><a class="menu__link" href="https://antonz.org/#projects"><span>projects</span>
+</a><a class="menu__link" href="https://antonz.org/#books"><span>books</span>
+</a><a class="menu__link" href="https://antonz.org/all/"><span>blog</span>
+</a><a class="menu__link" href="https://antonz.org/#about"><span>about</span>
+</a><a id="switch-theme" title="Switch theme" class="menu__link" href="https://antonz.org/do-not-testify/#theme"><span>◐</span></a></div><div class="col-xs-6 col-sm-3"><div class="search-module"><form action="https://duckduckgo.com/"><input type="hidden" name="kf" value="-1">
+<input type="hidden" name="kz" value="-1">
+<input type="hidden" name="kaf" value="1">
+<input type="hidden" name="ko" value="-2">
+<input type="hidden" name="k1" value="-1">
+<input type="hidden" name="sites" value="antonz.org">
+<input type="search" name="q" autocomplete="off" placeholder="Search" aria-label="Search"></form></div></div></div></div></div><div class="storey"><div class="container"><article class="post" data-namespace=""><div class="row"><div class="col-xs-12 col-md-10 article"><header><h1>Expressive tests without testify/assert</h1></header><p>Many Go programmers prefer using if-free test assertions to make their tests shorter and easier to read. So, instead of writing if statements with <code>t.Errorf</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span> <span class="o">:=</span> <span class="nf">getDB</span><span class="p">(</span><span class="nx">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">age</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Get</span><span class="p">(</span><span class="s">"age"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">!</span><span class="nx">errors</span><span class="p">.</span><span class="nf">Is</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span> <span class="nx">redka</span><span class="p">.</span><span class="nx">ErrNotFound</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %v; want: ErrNotFound"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">age</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %v; want: nil"</span><span class="p">,</span> <span class="nx">age</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>They would use <code>testify/assert</code> (or its evil twin, <code>testify/require</code>):</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span> <span class="o">:=</span> <span class="nf">getDB</span><span class="p">(</span><span class="nx">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">age</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Get</span><span class="p">(</span><span class="s">"age"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">assert</span><span class="p">.</span><span class="nf">ErrorIs</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="nx">redka</span><span class="p">.</span><span class="nx">ErrNotFound</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">assert</span><span class="p">.</span><span class="nf">Nil</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">age</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>However, I don't think you need <code>testify/assert</code> and its 40 different assertion functions to keep your tests clean. Here's an alternative approach.</p><blockquote><p>The testify package also provides mocks and test suite helpers. We won't talk about these — just about assertions.</p></blockquote><p><a href="https://antonz.org/do-not-testify/#asserting-equality">Equality</a> •
+<a href="https://antonz.org/do-not-testify/#asserting-errors">Errors</a> •
+<a href="https://antonz.org/do-not-testify/#other-assertions">Other assertions</a> •
+<a href="https://antonz.org/do-not-testify/#source-code">Source code</a> •
+<a href="https://antonz.org/do-not-testify/#final-thoughts">Final thoughts</a></p><h2 id="asserting-equality">Asserting equality</h2><p>The most common type of test assertion is checking for equality:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span> <span class="o">:=</span> <span class="nf">getDB</span><span class="p">(</span><span class="nx">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Get</span><span class="p">(</span><span class="s">"name"</span><span class="p">)</span> <span class="c1">// skip error checking for now
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">name</span><span class="p">.</span><span class="nf">String</span><span class="p">()</span> <span class="o">!=</span> <span class="s">"alice"</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %v; want: alice"</span><span class="p">,</span> <span class="nx">name</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Let's write a basic generic assertion helper:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// AssertEqual asserts that got is equal to want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">AssertEqual</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="nx">T</span><span class="p">,</span> <span class="nx">want</span> <span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Check if both are nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">got</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">want</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Fallback to reflective comparison.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">DeepEqual</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// No match, report the failure.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %#v; want: %#v"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-equal-1" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>We have to use a helper <code>isNil</code> function, because the compiler doesn't allow us to compare a typed <code>T</code> value with an untyped <code>nil</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// isNil checks if v is nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">v</span> <span class="nx">any</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">v</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// A non-nil interface can still hold a nil value,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// so we must check the underlying value.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">rv</span> <span class="o">:=</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">ValueOf</span><span class="p">(</span><span class="nx">v</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">switch</span> <span class="nx">rv</span><span class="p">.</span><span class="nf">Kind</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Chan</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Func</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Interface</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">reflect</span><span class="p">.</span><span class="nx">Map</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Slice</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">reflect</span><span class="p">.</span><span class="nx">UnsafePointer</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">rv</span><span class="p">.</span><span class="nf">IsNil</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Now let's use the assertion in our test:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span> <span class="o">:=</span> <span class="nf">getDB</span><span class="p">(</span><span class="nx">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">name</span><span class="p">,</span> <span class="nx">_</span> <span class="o">:=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Get</span><span class="p">(</span><span class="s">"name"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertEqual</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">name</span><span class="p">.</span><span class="nf">String</span><span class="p">(),</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" depends-on="s-equal-1" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>The parameter order in <code>AssertEqual</code> is (got, want), not (want, got) like it is in testify. It just feels more natural — saying "her name is Alice" instead of "Alice is her name".</p><p>Also, unlike testify, our assertion doesn't support custom error messages. When a test fails, you'll end up checking the code anyway, so why bother? The default error message shows what's different, and the line number points to the rest.</p><p><code>AssertEqual</code> is already good enough for all equality checks, which probably make up to 70% of your test assertions. Not bad for a 20-line testify alternative! But we can make it a little better, so let's not miss this chance.</p><p>First, types like <code>time.Time</code> and <code>net.IP</code> have an <code>Equal</code> method. We should use this method to make sure the comparison is accurate:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// equaler is an interface for types with an Equal method
+</span></span></span><span class="line"><span class="cl"><span class="c1">// (like time.Time or net.IP).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">equaler</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">]</span> <span class="kd">interface</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">Equal</span><span class="p">(</span><span class="nx">T</span><span class="p">)</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// areEqual checks if a and b are equal.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">areEqual</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">a</span><span class="p">,</span> <span class="nx">b</span> <span class="nx">T</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Check if both are nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">a</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Try to compare using an Equal method.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">eq</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nf">any</span><span class="p">(</span><span class="nx">a</span><span class="p">).(</span><span class="nx">equaler</span><span class="p">[</span><span class="nx">T</span><span class="p">]);</span> <span class="nx">ok</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">eq</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Fallback to reflective comparison.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">DeepEqual</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span> <span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Second, we can make comparing byte slices faster by using <code>bytes.Equal</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// areEqual checks if a and b are equal.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">areEqual</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">a</span><span class="p">,</span> <span class="nx">b</span> <span class="nx">T</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// Special case for byte slices.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">aBytes</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nf">any</span><span class="p">(</span><span class="nx">a</span><span class="p">).([]</span><span class="kt">byte</span><span class="p">);</span> <span class="nx">ok</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">bBytes</span> <span class="o">:=</span> <span class="nf">any</span><span class="p">(</span><span class="nx">b</span><span class="p">).([]</span><span class="kt">byte</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="nx">bytes</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">aBytes</span><span class="p">,</span> <span class="nx">bBytes</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>Finally, let's call <code>areEqual</code> from our <code>AssertEqual</code> function:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// AssertEqual asserts that got is equal to want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">AssertEqual</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="nx">T</span><span class="p">,</span> <span class="nx">want</span> <span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nf">areEqual</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %#v; want: %#v"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-equal-2" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>And test it on some values:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// date1 and date2 represent the same point in time,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">date1</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nx">UTC</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">date2</span> <span class="o">:=</span> <span class="nx">time</span><span class="p">.</span><span class="nf">Date</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">time</span><span class="p">.</span><span class="nf">FixedZone</span><span class="p">(</span><span class="s">"UTC+5"</span><span class="p">,</span> <span class="mi">5</span><span class="o">*</span><span class="mi">3600</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertEqual</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">date1</span><span class="p">,</span> <span class="nx">date2</span><span class="p">)</span> <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// b1 and b2 are equal byte slices.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">b1</span> <span class="o">:=</span> <span class="p">[]</span><span class="nb">byte</span><span class="p">(</span><span class="s">"abc"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">b2</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">{</span><span class="mi">97</span><span class="p">,</span> <span class="mi">98</span><span class="p">,</span> <span class="mi">99</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertEqual</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">b1</span><span class="p">,</span> <span class="nx">b2</span><span class="p">)</span> <span class="c1">// ok
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// m1 and m2 are different maps.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">m1</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span><span class="s">"age"</span><span class="p">:</span> <span class="mi">25</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">m2</span> <span class="o">:=</span> <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span><span class="s">"age"</span><span class="p">:</span> <span class="mi">42</span><span class="p">}</span> <span class="c1">// change to 25 to pass
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">AssertEqual</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">m1</span><span class="p">,</span> <span class="nx">m2</span><span class="p">)</span> <span class="c1">// fail
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" depends-on="s-equal-2" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Works like a charm!</p><h2 id="asserting-errors">Asserting errors</h2><p>Errors are everywhere in Go, so checking for them is an important part of testing:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span> <span class="o">:=</span> <span class="nf">getDB</span><span class="p">(</span><span class="nx">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Get</span><span class="p">(</span><span class="s">"name"</span><span class="p">)</span> <span class="c1">// ignore the value for brevity
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"unexpected error: %v'"</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Error checks probably make up to 30% of your test assertions, so let's create a separate function for them.</p><p>First we cover the basic cases — expecting no error and expecting an error:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// AssertErr asserts that the got error matches the want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">error</span><span class="p">,</span> <span class="nx">want</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Want nil error, but got is not nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// This is a fatal error, so we fail the test immediately.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">want</span> <span class="o">==</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">got</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">tb</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">"unexpected error: %v"</span><span class="p">,</span> <span class="nx">got</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Want non-nil error, got nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nx">want</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">got</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: &lt;nil&gt;; want: error"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Leave the rest for later.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">return</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Usually we don't fail the test when an assertion fails, to see all the errors at once instead of hunting them one by one. The "unexpected error" case (want nil, got non-nil) is the only exception: the test terminates immediately because any following assertions probably won't make sense and could cause panics.</p><p>Let's see how the assertion works:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span> <span class="o">:=</span> <span class="nf">getDB</span><span class="p">(</span><span class="nx">t</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Set</span><span class="p">(</span><span class="s">"name"</span><span class="p">,</span> <span class="s">"alice"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">db</span><span class="p">.</span><span class="nf">Str</span><span class="p">().</span><span class="nf">Get</span><span class="p">(</span><span class="s">"name"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="kc">nil</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>So far, so good. Now let's cover the rest of error checking without introducing separate functions (ErrorIs, ErrorAs, ErrorContains, etc.) like testify does.</p><p>If <code>want</code> is an error, we'll use <code>errors.Is</code> to check if the error matches the expected value:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// AssertErr asserts that the got error matches the want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">error</span><span class="p">,</span> <span class="nx">want</span> <span class="nx">any</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nx">want</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">got</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">tb</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"got: &lt;nil&gt;; want: error"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">switch</span> <span class="nx">w</span> <span class="o">:=</span> <span class="nx">want</span><span class="p">.(</span><span class="kd">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="kc">nil</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">got</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">tb</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">"unexpected error: %v"</span><span class="p">,</span> <span class="nx">got</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="kt">error</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">!</span><span class="nx">errors</span><span class="p">.</span><span class="nf">Is</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">w</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %T(%v); want: %T(%v)"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">w</span><span class="p">,</span> <span class="nx">w</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"unsupported want type: %T"</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Usage example:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">err</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Op</span><span class="p">:</span> <span class="s">"open"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Path</span><span class="p">:</span> <span class="s">"file.txt"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Err</span><span class="p">:</span> <span class="nx">fs</span><span class="p">.</span><span class="nx">ErrNotExist</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="nx">fs</span><span class="p">.</span><span class="nx">ErrNotExist</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>If <code>want</code> is a string, we'll check that the error message contains the expected substring:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// AssertErr asserts that the got error matches the want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">error</span><span class="p">,</span> <span class="nx">want</span> <span class="nx">any</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">switch</span> <span class="nx">w</span> <span class="o">:=</span> <span class="nx">want</span><span class="p">.(</span><span class="kd">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="kt">string</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">!</span><span class="nx">strings</span><span class="p">.</span><span class="nf">Contains</span><span class="p">(</span><span class="nx">got</span><span class="p">.</span><span class="nf">Error</span><span class="p">(),</span> <span class="nx">w</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %q; want: %q"</span><span class="p">,</span> <span class="nx">got</span><span class="p">.</span><span class="nf">Error</span><span class="p">(),</span> <span class="nx">w</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Usage example:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">regexp</span><span class="p">.</span><span class="nf">Compile</span><span class="p">(</span><span class="s">"he(?o"</span><span class="p">)</span> <span class="c1">// invalid
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">,</span> <span class="s">"invalid or unsupported"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Finally, if <code>want</code> is a type, we'll use <code>errors.As</code> to check if the error matches the expected type:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// AssertErr asserts that the got error matches the want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">error</span><span class="p">,</span> <span class="nx">want</span> <span class="nx">any</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">switch</span> <span class="nx">w</span> <span class="o">:=</span> <span class="nx">want</span><span class="p">.(</span><span class="kd">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">case</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Type</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">target</span> <span class="o">:=</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">w</span><span class="p">).</span><span class="nf">Interface</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="p">!</span><span class="nx">errors</span><span class="p">.</span><span class="nf">As</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">target</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %T; want: %s"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">w</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">//...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Usage example:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">got</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Op</span><span class="p">:</span> <span class="s">"open"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Path</span><span class="p">:</span> <span class="s">"file.txt"</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">Err</span><span class="p">:</span> <span class="nx">fs</span><span class="p">.</span><span class="nx">ErrNotExist</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kd">var</span> <span class="nx">want</span> <span class="o">*</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">TypeOf</span><span class="p">(</span><span class="nx">want</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Same thing.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">TypeFor</span><span class="p">[</span><span class="o">*</span><span class="nx">fs</span><span class="p">.</span><span class="nx">PathError</span><span class="p">]())</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>One last thing: <code>AssertErr</code> doesn't make it easy to check if there was <em>some</em> (non-nil) error without asserting its type or value (like <code>Error</code> in testify). Let's fix this by making the <code>want</code> parameter optional:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="c1">// AssertErr asserts that the got error matches any of the wanted values.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">error</span><span class="p">,</span> <span class="nx">wants</span> <span class="o">...</span><span class="nx">any</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// If no wants are given, we expect got to be a non-nil error.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">wants</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">if</span> <span class="nx">got</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nx">tb</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"got: &lt;nil&gt;; want: error"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// Here we only match against the first want for simplicity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// Alternatively, we can (and probably should) check
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="c1">// if got matches *any* of the wants.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nx">want</span> <span class="o">:=</span> <span class="nx">wants</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// ...
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><p>Usage example:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">regexp</span><span class="p">.</span><span class="nf">Compile</span><span class="p">(</span><span class="s">"he(?o"</span><span class="p">)</span> <span class="c1">// invalid
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>    <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span> <span class="c1">// want non-nil error
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now <code>AssertErr</code> handles all the cases we need:</p><ul><li>Check if there is an error.</li><li>Check if there is no error.</li><li>Check for a specific error value.</li><li>Check for an error of a certain type.</li><li>Check if the error message matches what we expect.</li></ul><p>And it's still under 40 lines of code. Not bad, right?</p><h2 id="other-assertions">Other assertions</h2><p><code>AssertEqual</code> and <code>AssertErr</code> probably handle 85-95% of test assertions in a typical Go project. But there's still that tricky 5-15% left.</p><p>We may need to check for conditions like these:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">s</span> <span class="o">:=</span> <span class="s">"go is awesome"</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="p">&lt;</span> <span class="mi">5</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"too short"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">!</span><span class="nx">strings</span><span class="p">.</span><span class="nf">Contains</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">"go"</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">t</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"too weak"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Technically, we can use <code>AssertEqual</code>. But it looks a bit ugly:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">s</span> <span class="o">:=</span> <span class="s">"go is awesome"</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertEqual</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">,</span> <span class="kc">true</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertEqual</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Contains</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">"go"</span><span class="p">),</span> <span class="kc">true</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" depends-on="s-equal-2" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>So let's introduce the third and final assertion function — <code>AssertTrue</code>. It's the simplest one of all:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="c1">// AssertTrue asserts that got is true.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertTrue</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">!</span><span class="nx">got</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nx">tb</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"got: false; want: true"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet id="s-true" editor="basic" state="unknown">
+<codapi-toolbar>
+<button hidden="">Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Now these assertions look better:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go" contenteditable="true" spellcheck="false"><span class="line"><span class="cl"><span class="kd">func</span> <span class="nf">Test</span><span class="p">(</span><span class="nx">t</span> <span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nx">s</span> <span class="o">:=</span> <span class="s">"go is awesome"</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertTrue</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">5</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="nf">AssertTrue</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Contains</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span> <span class="s">"go"</span><span class="p">))</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><codapi-snippet sandbox="go" command="test" editor="basic" depends-on="s-true" template="main_test.go" output="" state="unknown">
+<codapi-toolbar>
+<button>Run</button>
+<a href="https://antonz.org/do-not-testify/#edit">Edit</a>
+<codapi-status></codapi-status>
+</codapi-toolbar>
+<codapi-output hidden="" mode="text">
+<a href="https://antonz.org/do-not-testify/#close">✕</a>
+<pre><code></code></pre>
+</codapi-output>
+</codapi-snippet><p>Nice!</p><h2 id="source-code">Source code</h2><p>Here's the full annotated source code for <code>AssertEqual</code>, <code>AssertErr</code> and <code>AssertTrue</code>:</p><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-go" data-lang="go"><span class="line"><span class="cl"><span class="kn">package</span> <span class="nx">testx</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="p">(</span>
+</span></span><span class="line"><span class="cl">	<span class="s">"bytes"</span>
+</span></span><span class="line"><span class="cl">	<span class="s">"errors"</span>
+</span></span><span class="line"><span class="cl">	<span class="s">"reflect"</span>
+</span></span><span class="line"><span class="cl">	<span class="s">"strings"</span>
+</span></span><span class="line"><span class="cl">	<span class="s">"testing"</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// AssertEqual asserts that got is equal to want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">AssertEqual</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="nx">T</span><span class="p">,</span> <span class="nx">want</span> <span class="nx">T</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nf">areEqual</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %#v; want: %#v"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// AssertErr asserts that the got error matches the want.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertErr</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">error</span><span class="p">,</span> <span class="nx">wants</span> <span class="o">...</span><span class="nx">any</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// If no wants are given, we expect got to be a non-nil error.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">wants</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">got</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">tb</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"got: &lt;nil&gt;; want: error"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// We'll only match against the first want for simplicity.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">want</span> <span class="o">:=</span> <span class="nx">wants</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">want</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="o">&amp;&amp;</span> <span class="nx">got</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">tb</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"got: &lt;nil&gt;; want: error"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">switch</span> <span class="nx">w</span> <span class="o">:=</span> <span class="nx">want</span><span class="p">.(</span><span class="kd">type</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="kc">nil</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="nx">got</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">tb</span><span class="p">.</span><span class="nf">Fatalf</span><span class="p">(</span><span class="s">"unexpected error: %v"</span><span class="p">,</span> <span class="nx">got</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="kt">string</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="p">!</span><span class="nx">strings</span><span class="p">.</span><span class="nf">Contains</span><span class="p">(</span><span class="nx">got</span><span class="p">.</span><span class="nf">Error</span><span class="p">(),</span> <span class="nx">w</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %q; want: %q"</span><span class="p">,</span> <span class="nx">got</span><span class="p">.</span><span class="nf">Error</span><span class="p">(),</span> <span class="nx">w</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="kt">error</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="p">!</span><span class="nx">errors</span><span class="p">.</span><span class="nf">Is</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">w</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %T(%v); want: %T(%v)"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">w</span><span class="p">,</span> <span class="nx">w</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Type</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">target</span> <span class="o">:=</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">New</span><span class="p">(</span><span class="nx">w</span><span class="p">).</span><span class="nf">Interface</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">		<span class="k">if</span> <span class="p">!</span><span class="nx">errors</span><span class="p">.</span><span class="nf">As</span><span class="p">(</span><span class="nx">got</span><span class="p">,</span> <span class="nx">target</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">			<span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"got: %T; want: %s"</span><span class="p">,</span> <span class="nx">got</span><span class="p">,</span> <span class="nx">w</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">tb</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">"unsupported want type: %T"</span><span class="p">,</span> <span class="nx">want</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// AssertTrue asserts that got is true.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">AssertTrue</span><span class="p">(</span><span class="nx">tb</span> <span class="nx">testing</span><span class="p">.</span><span class="nx">TB</span><span class="p">,</span> <span class="nx">got</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nx">tb</span><span class="p">.</span><span class="nf">Helper</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="p">!</span><span class="nx">got</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">tb</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">"got: false; want: true"</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// equaler is an interface for types with an Equal method
+</span></span></span><span class="line"><span class="cl"><span class="c1">// (like time.Time or net.IP).
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">type</span> <span class="nx">equaler</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">]</span> <span class="kd">interface</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="nf">Equal</span><span class="p">(</span><span class="nx">T</span><span class="p">)</span> <span class="kt">bool</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// areEqual checks if a and b are equal.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nx">areEqual</span><span class="p">[</span><span class="nx">T</span> <span class="nx">any</span><span class="p">](</span><span class="nx">a</span><span class="p">,</span> <span class="nx">b</span> <span class="nx">T</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="c1">// Check if both are nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">if</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">a</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// Try to compare using an Equal method.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">if</span> <span class="nx">eq</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nf">any</span><span class="p">(</span><span class="nx">a</span><span class="p">).(</span><span class="nx">equaler</span><span class="p">[</span><span class="nx">T</span><span class="p">]);</span> <span class="nx">ok</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="nx">eq</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// Special case for byte slices.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">if</span> <span class="nx">aBytes</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nf">any</span><span class="p">(</span><span class="nx">a</span><span class="p">).([]</span><span class="kt">byte</span><span class="p">);</span> <span class="nx">ok</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">bBytes</span> <span class="o">:=</span> <span class="nf">any</span><span class="p">(</span><span class="nx">b</span><span class="p">).([]</span><span class="kt">byte</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="nx">bytes</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">aBytes</span><span class="p">,</span> <span class="nx">bBytes</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// Fallback to reflective comparison.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="k">return</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">DeepEqual</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span> <span class="nx">b</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1">// isNil checks if v is nil.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kd">func</span> <span class="nf">isNil</span><span class="p">(</span><span class="nx">v</span> <span class="nx">any</span><span class="p">)</span> <span class="kt">bool</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">if</span> <span class="nx">v</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="c1">// A non-nil interface can still hold a nil value,
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="c1">// so we must check the underlying value.
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span>	<span class="nx">rv</span> <span class="o">:=</span> <span class="nx">reflect</span><span class="p">.</span><span class="nf">ValueOf</span><span class="p">(</span><span class="nx">v</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="k">switch</span> <span class="nx">rv</span><span class="p">.</span><span class="nf">Kind</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">case</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Chan</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Func</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Interface</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Map</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">		<span class="nx">reflect</span><span class="p">.</span><span class="nx">Pointer</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">Slice</span><span class="p">,</span> <span class="nx">reflect</span><span class="p">.</span><span class="nx">UnsafePointer</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="nx">rv</span><span class="p">.</span><span class="nf">IsNil</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">	<span class="k">default</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Less than 120 lines of code!</p><h2 id="final-thoughts">Final thoughts</h2><p>I don't think we need forty assertion functions to test Go apps. Three (or even two) are enough, as long as they correctly check for equality and handle different error cases.</p><p>I find the "assertion trio" — Equal, Err, and True — quite useful in practice. That's why I extracted it into the <a href="https://github.com/nalgeon/be">github.com/nalgeon/be</a> mini-package. If you like the approach described in this article, give it a try!</p><script defer="" src="./Expressive tests without testify_assert_files/snippet.js.download"></script><p><a href="https://antonz.org/subscribe/">★&nbsp;Subscribe</a> to keep up with new posts.</p></div></div><footer class="post__footer"><div class="row"><div class="col-xs-12"><div class="post__date"><time datetime="2025-07-16 06:00:00 +0000 UTC">16 Jul, 2025</time></div><div class="post__tags"><a href="https://antonz.org/tags/thank-go/">thank-go</a>&nbsp;</div></div></div></footer></article><aside class="post__related"><div class="post__nav article"><div class="row"><div class="col-xs-12 col-sm-6"><p>←&nbsp;<a href="https://antonz.org/redka/">Redka: Redis re-implemented with SQL</a></p></div><div class="col-xs-12 col-sm-6"><p><a href="https://antonz.org/go-concurrency/signaling/">Gist of Go: Signaling</a>&nbsp;→</p></div></div></div><div class="article"><div class="row"><div class="col-xs-12 col-sm-8 col-md-6 post__related__also"><h3>See also</h3><p><a href="https://antonz.org/be/">Concise test assertions with Be</a></p><p><a href="https://antonz.org/go-concurrency/semaphores/">Gist of Go: Semaphores</a></p><p><a href="https://antonz.org/go-1-25/">Go 1.25 interactive tour</a></p></div></div></div></aside></div></div><footer class="container footer"><ul class="naked-list"><li class="footer__item">Subscribe:
+<a href="https://buttondown.email/antonz" class="footer__social-link"><i class="fas fa-envelope"></i><span>Newsletter</span>
+</a><a href="https://x.com/ohmypy" class="footer__social-link"><i class="fab fa-twitter"></i><span>Twitter</span>
+</a><a href="https://bsky.app/profile/antonz.org" class="footer__social-link"><i class="fab fa-bluesky"></i><span>Bluesky</span>
+</a><a href="https://c.im/@antonz" class="footer__social-link"><i class="fab fa-mastodon"></i><span>Mastodon</span>
+</a><a href="https://www.linkedin.com/in/nalgeon/" class="footer__social-link"><i class="fab fa-linkedin"></i><span>LinkedIn</span>
+</a><a href="https://github.com/nalgeon" class="footer__social-link"><i class="fab fa-github"></i><span>GitHub</span>
+</a><a href="https://antonz.org/index.xml" class="footer__social-link"><i class="fas fa-rss"></i><span>RSS</span></a></li><li class="footer__item">Email: <a href="mailto:m@antonz.org">m@antonz.org</a></li></ul></footer><script defer="">var theme=localStorage.getItem("theme");theme||(theme=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"),document.documentElement.setAttribute("data-theme",theme),document.getElementById("switch-theme").addEventListener("click",function(e){e.preventDefault(),document.documentElement.getAttribute("data-theme")==="dark"?(document.documentElement.setAttribute("data-theme","light"),localStorage.setItem("theme","light")):(document.documentElement.setAttribute("data-theme","dark"),localStorage.setItem("theme","dark"))})</script><script async="" src="https://gc.zgo.at/count.js" data-goatcounter="https://antonzorg.goatcounter.com/count"></script></body></html>
