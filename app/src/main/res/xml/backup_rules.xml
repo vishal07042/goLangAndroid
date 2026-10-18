@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12- backup rules.
+     Prefs are excluded: the done-today date, streak set and enforcement
+     flags are device-local — restoring them on another device would
+     desync the 7 AM enforcement state. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="go_enforcer_prefs.xml" />
+    <exclude domain="sharedpref" path="affirmation_enforcer_prefs.xml" />
+</full-backup-content>

@@ -5,8 +5,21 @@
         <package android:name="com.google.android.inputmethod.latine" />
     </queries>
 
+    <!-- ── Affirmation Enforcer ── -->
+    <!-- Auto-granted at install; enables setAlarmClock() at 7:00 AM without
+         the special-access settings toggle. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Grant once via: adb shell pm grant com.example.goenforcer android.permission.WRITE_SECURE_SETTINGS -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
@@ -19,6 +32,43 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Affirmation Enforcer: forced up by the accessibility service at 7 AM -->
+        <activity
+            android:name=".AffirmationActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showOnLockScreen="true"
+            android:taskAffinity="com.example.goenforcer.affirmation" />
+
+        <!-- Only enabled via WRITE_SECURE_SETTINGS during the 7 AM window -->
+        <service
+            android:name=".EnforcerAccessibilityService"
+            android:exported="true"
+            android:label="Affirmation Enforcer"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/enforcer_accessibility_config" />
+        </service>
+
+        <receiver
+            android:name=".AffirmationAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Re-arm the 7 AM alarm after reboot / update -->
+        <receiver
+            android:name=".EnforcerBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

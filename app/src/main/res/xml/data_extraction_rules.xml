@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 13+ backup / device-transfer rules. Same rationale as
+     backup_rules.xml: enforcement + streak state is device-local. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="go_enforcer_prefs.xml" />
+        <exclude domain="sharedpref" path="affirmation_enforcer_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="go_enforcer_prefs.xml" />
+        <exclude domain="sharedpref" path="affirmation_enforcer_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>

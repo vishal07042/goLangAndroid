@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Affirmation Enforcer: only used inside the 7 AM enforcement window.
+     No window content access — just package/window state, so the app can be
+     pulled back to the front while any other app is open. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="200"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/enforcer_service_desc"
+    android:accessibilityFlags="flagDefault" />

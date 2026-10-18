@@ -45,6 +45,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -55,11 +60,21 @@ private val CardShape = RoundedCornerShape(24.dp)
 @Composable
 fun HomeScreen(onChallenge: () -> Unit) {
     val context = LocalContext.current
-    val doneToday = remember { Store.isDoneToday(context) }
-    val streak = Store.streak(context)
-    val snippets = Store.totalSnippets(context)
-    val words = Store.totalWords(context)
-    val accuracy = Store.accuracy(context)
+    val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
+    val home by vm.state.collectAsStateWithLifecycle()
+
+    // Refresh every time the dashboard resumes — returning from the
+    // AffirmationScreen (or any app) always shows the current state.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.RESUMED) { vm.refresh() }
+    }
+
+    val streak = home.streak
+    val snippets = home.snippets
+    val words = home.words
+    val accuracy = home.accuracy
+    val doneToday = home.doneToday
     val todayLabel = SimpleDateFormat("EEEE, MMM d", Locale.US).format(Date())
 
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -226,6 +241,66 @@ fun HomeScreen(onChallenge: () -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // ── Affirmation Enforcer (7:00 AM enforcement window) ──
+            item {
+                // Keep tomorrow's 7 AM exact alarm armed (idempotent).
+                LaunchedEffect(Unit) { AffirmationScheduler.schedule(context) }
+
+                PremiumCard(modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(GoColors.AccentGold)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "AFFIRMATION ENFORCER \u00B7 7:00 AM",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = GoColors.TextFaint,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = home.affirmationText,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = GoColors.TextPrimary
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        if (home.affirmationDone) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Filled.CheckCircle, null, tint = GoColors.Success)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Affirmation written today", color = GoColors.Success, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            TactileButton(
+                                text = "Write affirmation now",
+                                onClick = {
+                                    context.startActivity(
+                                        android.content.Intent(context, AffirmationActivity::class.java)
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = home.enforcementStatus,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = GoColors.TextFaint
+                            )
                         }
                     }
                 }
