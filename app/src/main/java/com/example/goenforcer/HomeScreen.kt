@@ -58,6 +58,31 @@ import java.util.Locale
 private val CardShape = RoundedCornerShape(24.dp)
 
 @Composable
+private fun WindowChip(label: String, done: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (done) GoColors.Success.copy(alpha = 0.15f) else GoColors.Surface)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Icon(
+            imageVector = if (done) Icons.Filled.CheckCircle else Icons.Filled.Lock,
+            contentDescription = null,
+            tint = if (done) GoColors.Success else GoColors.TextFaint,
+            modifier = Modifier.size(12.dp)
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = if (done) "$label done" else label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (done) GoColors.Success else GoColors.TextMuted
+        )
+    }
+}
+
+@Composable
 fun HomeScreen(onChallenge: () -> Unit) {
     val context = LocalContext.current
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
@@ -262,7 +287,7 @@ fun HomeScreen(onChallenge: () -> Unit) {
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "AFFIRMATION ENFORCER \u00B7 7:00 AM",
+                                text = "AFFIRMATION ENFORCER \u00B7 ${home.windowLabel}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = GoColors.TextFaint,
                                 letterSpacing = 1.sp
@@ -275,7 +300,7 @@ fun HomeScreen(onChallenge: () -> Unit) {
                             color = GoColors.TextPrimary
                         )
                         Spacer(Modifier.height(12.dp))
-                        if (home.affirmationDone) {
+                        if (home.activePm == null) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -283,18 +308,25 @@ fun HomeScreen(onChallenge: () -> Unit) {
                             ) {
                                 Icon(Icons.Filled.CheckCircle, null, tint = GoColors.Success)
                                 Spacer(Modifier.width(8.dp))
-                                Text("Affirmation written today", color = GoColors.Success, fontWeight = FontWeight.Bold)
+                                Text("Both sessions written today", color = GoColors.Success, fontWeight = FontWeight.Bold)
                             }
                         } else {
                             TactileButton(
-                                text = "Write affirmation now",
+                                text = "Write affirmations now",
                                 onClick = {
                                     context.startActivity(
                                         android.content.Intent(context, AffirmationActivity::class.java)
+                                            .putExtra(AffirmationScheduler.EXTRA_PM, home.activePm == true)
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             )
+                            Spacer(Modifier.height(8.dp))
+                            // Morning / evening completion chips
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                WindowChip(label = "7 AM", done = home.morningDone)
+                                WindowChip(label = "7 PM", done = home.eveningDone)
+                            }
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 text = home.enforcementStatus,

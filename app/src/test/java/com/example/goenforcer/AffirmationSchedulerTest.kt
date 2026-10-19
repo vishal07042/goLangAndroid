@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Calendar
 
-/** Tests for the 7:00 AM trigger math and UI-state reducers. */
+/** Tests for the 7:00 AM / 7:00 PM trigger math and UI-state reducers. */
 class AffirmationSchedulerTest {
 
     private fun calendarAt(hour: Int, minute: Int, second: Int = 0): Calendar =
@@ -22,15 +22,16 @@ class AffirmationSchedulerTest {
     private fun hourOf(millis: Long): Int =
         Calendar.getInstance().apply { timeInMillis = millis }.get(Calendar.HOUR_OF_DAY)
 
+    // ── Morning window (7 AM) ────────────────────────────────────────
     @Test
     fun `before 7am triggers same day at 7am`() {
-        val trigger = AffirmationScheduler.nextTriggerMillis(calendarAt(6, 59))
+        val trigger = AffirmationScheduler.nextTriggerMillis(pm = false, now = calendarAt(6, 59))
         assertEquals(7, hourOf(trigger))
     }
 
     @Test
     fun `exactly 7am rolls to tomorrow`() {
-        val trigger = AffirmationScheduler.nextTriggerMillis(calendarAt(7, 0, 30))
+        val trigger = AffirmationScheduler.nextTriggerMillis(pm = false, now = calendarAt(7, 0, 30))
         assertEquals(7, hourOf(trigger))
         val days = Calendar.getInstance().apply { timeInMillis = trigger }.get(Calendar.DAY_OF_MONTH)
         assertEquals(19, days) // Oct 18 + 1
@@ -38,17 +39,46 @@ class AffirmationSchedulerTest {
 
     @Test
     fun `evening rolls to next morning`() {
-        val trigger = AffirmationScheduler.nextTriggerMillis(calendarAt(20, 0))
+        val trigger = AffirmationScheduler.nextTriggerMillis(pm = false, now = calendarAt(20, 0))
         assertEquals(7, hourOf(trigger))
     }
 
+    // ── Evening window (7 PM) ─────────────────────────────────────────
     @Test
-    fun `trigger is always in the future`() {
+    fun `before 7pm triggers same day at 19h`() {
+        val trigger = AffirmationScheduler.nextTriggerMillis(pm = true, now = calendarAt(12, 0))
+        assertEquals(19, hourOf(trigger))
+    }
+
+    @Test
+    fun `after 7pm rolls to tomorrow evening`() {
+        val trigger = AffirmationScheduler.nextTriggerMillis(pm = true, now = calendarAt(21, 0))
+        assertEquals(19, hourOf(trigger))
+        val days = Calendar.getInstance().apply { timeInMillis = trigger }.get(Calendar.DAY_OF_MONTH)
+        assertEquals(19, days)
+    }
+
+    @Test
+    fun `am and pm triggers are distinct`() {
+        val now = calendarAt(6, 0)
+        val am = AffirmationScheduler.nextTriggerMillis(pm = false, now = now)
+        val pm = AffirmationScheduler.nextTriggerMillis(pm = true, now = now)
+        assertTrue(pm > am)
+        assertEquals(7, hourOf(am))
+        assertEquals(19, hourOf(pm))
+    }
+
+    @Test
+    fun `trigger is always in the future for every hour`() {
         for (h in 0..23) {
+            val now = calendarAt(h, 30)
             assertTrue(
-                "trigger must be future for hour $h",
-                AffirmationScheduler.nextTriggerMillis(calendarAt(h, 30)) >
-                    calendarAt(h, 30).timeInMillis
+                "AM trigger must be future for hour $h",
+                AffirmationScheduler.nextTriggerMillis(pm = false, now = now) > now.timeInMillis
+            )
+            assertTrue(
+                "PM trigger must be future for hour $h",
+                AffirmationScheduler.nextTriggerMillis(pm = true, now = now) > now.timeInMillis
             )
         }
     }
@@ -83,25 +113,56 @@ class UiStateTest {
     }
 
     @Test
-    fun `enforcement status text reflects permission service and done state`() {
-        val locked = HomeUiState(
-            affirmationDone = false, wssGranted = false, serviceEnabled = false
+    fun `activePm resolves am first then pm then null`() {
+        val noneDone = HomeUiState(morningDone = false, eveningDone = false)
+        assertEquals(false, noneDone.activePm)
+
+        val amDone = HomeUiState(morningDone = true, eveningDone = false)
+        assertEquals(true, amDone.activePm)
+
+        val allDone = HomeUiState(morningDone = true, eveningDone = true)
+        assertEquals(null, allDone.activePm)
+    }
+
+    @Test
+    fun `enforcement status reflects permission service and windows`() {
+        val pending = HomeUiState(
+            morningDone = false, eveningDone = false, wssGranted = false, serviceEnabled = false
         )
-        assertTrue(locked.enforcementStatus.contains("adb shell pm grant"))
+        assertTrue(pending.enforcementStatus.contains("adb shell pm grant"))
+        assertTrue(pending.windowLabel.contains("7:00 AM"))
 
         val armed = HomeUiState(
-            affirmationDone = false, wssGranted = true, serviceEnabled = false
+            morningDone = true, eveningDone = false, wssGranted = true, serviceEnabled = false
         )
-        assertTrue(armed.enforcementStatus.contains("7:00 AM"))
+        assertTrue(armed.enforcementStatus.contains("7:00 PM"))
+        assertTrue(armed.windowLabel.contains("7:00 PM"))
 
         val enforcing = HomeUiState(
-            affirmationDone = false, wssGranted = true, serviceEnabled = true
+            morningDone = false, eveningDone = false, wssGranted = true, serviceEnabled = true
         )
         assertTrue(enforcing.enforcementStatus.contains("Enforcing now"))
 
         val done = HomeUiState(
-            affirmationDone = true, wssGranted = true, serviceEnabled = false
+            morningDone = true, eveningDone = true, wssGranted = true, serviceEnabled = false
         )
-        assertTrue(done.enforcementStatus.contains("written today"))
+        assertTrue(done.enforcementStatus.contains("Both sessions"))
+        assertTrue(done.windowLabel.contains("complete"))
+    }
+}
+
+/** The bank itself: user-authored list, pick mechanics. */
+class AffirmationBankTest {
+
+    @Test
+    fun `bank has the authored affirmations and no empties`() {
+        assertEquals(18, AffirmationStore.BANK.size)
+        assertTrue(AffirmationStore.BANK.all { it.isNotBlank() })
+    }
+
+    @Test
+    fun `pick count is three`() {
+        assertEquals(3, AffirmationStore.PICK_COUNT)
+        assertTrue(AffirmationStore.PICK_COUNT <= AffirmationStore.BANK.size)
     }
 }

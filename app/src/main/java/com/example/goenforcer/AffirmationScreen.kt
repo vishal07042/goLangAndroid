@@ -217,11 +217,12 @@ private fun AffCodeDisplay(
 
 @Composable
 fun AffirmationScreen(
+    pm: Boolean = false,
     onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val vm: AffirmationViewModel = viewModel(factory = AffirmationViewModel.Factory)
+    val vm: AffirmationViewModel = viewModel(factory = AffirmationViewModel.Factory(pm))
     val state by vm.state.collectAsStateWithLifecycle()
 
     // ── One-shot effects: haptics, shake, toast (audio lives in the VM) ──
@@ -238,8 +239,15 @@ fun AffirmationScreen(
                     }
                     shake.animateTo(0f)
                 }
-                TypingEffect.Completed ->
-                    Toast.makeText(context, "Affirmation written \u2014 apps unlocked", Toast.LENGTH_LONG).show()
+                TypingEffect.Completed -> {
+                    val stillPending = AffirmationStore.activeWindow(context) != null
+                    Toast.makeText(
+                        context,
+                        if (stillPending) "Session done \u2014 next one enforced at ${if (AffirmationStore.activeWindow(context) == true) "7:00 PM" else "7:00 AM"}"
+                        else "Affirmations written \u2014 apps unlocked",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
     }
@@ -282,12 +290,12 @@ fun AffirmationScreen(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Morning Affirmation",
+                        text = if (pm) "Evening Affirmation" else "Morning Affirmation",
                         style = MaterialTheme.typography.titleMedium,
                         color = GoColors.TextPrimary
                     )
                     Text(
-                        text = "Rewrite it to unlock your apps",
+                        text = "Rewrite all ${AffirmationStore.PICK_COUNT} affirmations to unlock your apps",
                         style = MaterialTheme.typography.labelSmall,
                         color = GoColors.TextFaint
                     )

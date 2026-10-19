@@ -49,13 +49,16 @@ sealed interface TypingEffect {
     data object Completed : TypingEffect
 }
 
-class AffirmationViewModel(app: Application) : AndroidViewModel(app) {
+class AffirmationViewModel(app: Application, private val pm: Boolean) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(loadInitialState())
     val state: StateFlow<AffirmationUiState> = _state.asStateFlow()
 
     private val _effects = Channel<TypingEffect>(Channel.BUFFERED)
     val effects = _effects.receiveAsFlow()
+
+    /** Which window this session fulfils (false = 7 AM, true = 7 PM). */
+    val eveningWindow: Boolean get() = pm
 
     // ── Audio owned by the VM: created off the main thread, released with
     //    the VM instead of leaking across config changes. ──
@@ -76,7 +79,7 @@ class AffirmationViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadInitialState(): AffirmationUiState {
-        val text = AffirmationStore.todayText(getApplication())
+        val text = AffirmationStore.windowText(getApplication(), pm)
         return AffirmationUiState(
             affirmation = text,
             segments = AffirmationStore.wrappedSegments(text),
@@ -136,11 +139,14 @@ class AffirmationViewModel(app: Application) : AndroidViewModel(app) {
         if (Core.isComplete(_state.value.session)) complete()
     }
 
-    /** Enforcement handoff: done → a11y OFF, tomorrow's alarm armed. */
+    /** Enforcement handoff: done → a11y OFF (if no window left), next alarm armed. */
     private fun complete() {
         val app = getApplication<Application>()
-        AffirmationStore.markDone(app)
-        SecureSettings.setServiceEnabled(app, enable = false)
+        AffirmationStore.markDone(app, pm)
+        // Both windows done → accessibility off for the rest of the day.
+        if (AffirmationStore.activeWindow(app) == null) {
+            SecureSettings.setServiceEnabled(app, enable = false)
+        }
         AffirmationScheduler.schedule(app)
         _state.update { it.copy(mood = MascotMood.Success, celebrating = true) }
         emit(TypingEffect.Completed)
@@ -171,10 +177,12 @@ class AffirmationViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
-        val Factory: ViewModelProvider.Factory = viewModelFactory {
+        /** [pm] selects the window: false = 7 AM, true = 7 PM. */
+        fun factory(pm: Boolean): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 AffirmationViewModel(
-                    this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application
+                    this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application,
+                    pm
                 )
             }
         }

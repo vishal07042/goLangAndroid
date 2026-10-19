@@ -1,20 +1,19 @@
 package com.example.goenforcer
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 
 // ─── Affirmation Enforcer service ───────────────────────────────────────
-// Enabled by the 7 AM exact alarm via WRITE_SECURE_SETTINGS (SecureSettings)
-// and disables ITSELF the moment the affirmation is rewritten — it is never
-// left on outside the enforcement window.
+// Enabled by the 7 AM / 7 PM exact alarms via WRITE_SECURE_SETTINGS
+// (SecureSettings) and disables ITSELF once both windows of the day are
+// rewritten — it is never left on outside the enforcement windows.
 //
-// Loop: while today's affirmation is unfinished, any non-whitelisted app in
-// the foreground gets pushed to Home and the AffirmationScreen is pulled
-// straight back to the front.
+// Loop: while the active window's affirmations are unfinished, any
+// non-whitelisted app in the foreground gets pushed to Home and the
+// AffirmationScreen is pulled straight back to the front.
 class EnforcerAccessibilityService : AccessibilityService() {
 
     companion object {
@@ -63,9 +62,11 @@ class EnforcerAccessibilityService : AccessibilityService() {
     private fun enforce(reason: String) {
         val ctx = applicationContext
 
-        // Done for today → shut ourselves off. Accessibility is now off until
-        // tomorrow's 7 AM alarm re-enables it.
-        if (AffirmationStore.isDoneToday(ctx)) {
+        // Which window still needs work? null = both done for today →
+        // shut ourselves off. Accessibility stays off until the next
+        // 7 AM / 7 PM alarm re-enables it.
+        val window = AffirmationStore.activeWindow(ctx)
+        if (window == null) {
             SecureSettings.setServiceEnabled(ctx, enable = false)
             performGlobalAction(GLOBAL_ACTION_HOME)
             return
@@ -84,16 +85,17 @@ class EnforcerAccessibilityService : AccessibilityService() {
         // Kick whatever foreign app is open to Home…
         performGlobalAction(GLOBAL_ACTION_HOME)
         // …and pull our screen back up.
-        handler.postDelayed({ launchAffirmationScreen() }, 350)
+        handler.postDelayed({ launchAffirmationScreen(window) }, 350)
     }
 
-    /** Launch (or re-focus) the AffirmationScreen from the background. */
-    fun launchAffirmationScreen() {
-        if (AffirmationStore.isDoneToday(applicationContext)) return
+    /** Launch (or re-focus) the AffirmationScreen for [pm] window. */
+    fun launchAffirmationScreen(pm: Boolean) {
+        if (AffirmationStore.isDone(applicationContext, pm)) return
         runCatching {
             startActivity(
                 Intent(this, AffirmationActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    .putExtra(AffirmationScheduler.EXTRA_PM, pm)
             )
         }
     }
@@ -107,7 +109,7 @@ class EnforcerAccessibilityService : AccessibilityService() {
     }
 }
 
-// Re-arm the 7 AM alarm after reboot / app update / permission re-grant.
+// Re-arm the 7 AM / 7 PM alarms after reboot / update / permission re-grant.
 class EnforcerBootReceiver : android.content.BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         // Strict action match — anything else is ignored.
