@@ -40,6 +40,7 @@ object AffirmationStore {
         "Lift iron, lift self-esteem.",
         "use it or lose it.",
         "read aloud , retain longer"
+        "reps builds confidence"
     )
 
     private fun sp(ctx: Context) =

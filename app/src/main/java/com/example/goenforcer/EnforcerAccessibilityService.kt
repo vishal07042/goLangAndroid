@@ -8,10 +8,11 @@ import android.view.accessibility.AccessibilityEvent
 
 // ─── Affirmation Enforcer service ───────────────────────────────────────
 // Enabled by the 7 AM / 7 PM exact alarms via WRITE_SECURE_SETTINGS
-// (SecureSettings) and disables ITSELF once both windows of the day are
-// rewritten — it is never left on outside the enforcement windows.
+// (SecureSettings) and disables ITSELF the moment that session's
+// affirmations are rewritten — accessibility is only ever on inside a
+// single enforcement window, never between them.
 //
-// Loop: while the active window's affirmations are unfinished, any
+// Loop: while the current window's affirmations are unfinished, any
 // non-whitelisted app in the foreground gets pushed to Home and the
 // AffirmationScreen is pulled straight back to the front.
 class EnforcerAccessibilityService : AccessibilityService() {
@@ -62,16 +63,22 @@ class EnforcerAccessibilityService : AccessibilityService() {
     private fun enforce(reason: String) {
         val ctx = applicationContext
 
-        // Which window still needs work? null = both done for today →
-        // shut ourselves off. Accessibility stays off until the next
-        // 7 AM / 7 PM alarm re-enables it.
-        val window = AffirmationStore.activeWindow(ctx)
-        if (window == null) {
+        // Both windows done → shut ourselves off. Accessibility stays off
+        // until the next 7 AM / 7 PM alarm re-enables it.
+        if (AffirmationStore.activeWindow(ctx) == null) {
             SecureSettings.setServiceEnabled(ctx, enable = false)
             performGlobalAction(GLOBAL_ACTION_HOME)
             return
         }
         if (!AffirmationStore.enforceEnabled(ctx)) return
+
+        // Each session closes its own window (the VM disables this service
+        // the moment the session is rewritten). A briefly-still-bound
+        // service must NOT jump to enforcing the next window — only
+        // enforce the window that matches the current time.
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val currentWindow = hour >= AffirmationScheduler.ENFORCE_HOUR_PM // false = 7 AM, true = 7 PM
+        if (AffirmationStore.isDone(ctx, currentWindow)) return
 
         // Don't fight ourselves or the launcher/settings.
         val fg = currentForeground()
@@ -85,7 +92,7 @@ class EnforcerAccessibilityService : AccessibilityService() {
         // Kick whatever foreign app is open to Home…
         performGlobalAction(GLOBAL_ACTION_HOME)
         // …and pull our screen back up.
-        handler.postDelayed({ launchAffirmationScreen(window) }, 350)
+        handler.postDelayed({ launchAffirmationScreen(currentWindow) }, 350)
     }
 
     /** Launch (or re-focus) the AffirmationScreen for [pm] window. */

@@ -139,14 +139,13 @@ class AffirmationViewModel(app: Application, private val pm: Boolean) : AndroidV
         if (Core.isComplete(_state.value.session)) complete()
     }
 
-    /** Enforcement handoff: done → a11y OFF (if no window left), next alarm armed. */
+    /** Enforcement handoff: session done → a11y OFF right away, next alarm armed. */
     private fun complete() {
         val app = getApplication<Application>()
         AffirmationStore.markDone(app, pm)
-        // Both windows done → accessibility off for the rest of the day.
-        if (AffirmationStore.activeWindow(app) == null) {
-            SecureSettings.setServiceEnabled(app, enable = false)
-        }
+        // Each session closes its own window: accessibility off immediately.
+        // The next alarm (7 PM or tomorrow 7 AM) turns it back on.
+        SecureSettings.setServiceEnabled(app, enable = false)
         AffirmationScheduler.schedule(app)
         _state.update { it.copy(mood = MascotMood.Success, celebrating = true) }
         emit(TypingEffect.Completed)
