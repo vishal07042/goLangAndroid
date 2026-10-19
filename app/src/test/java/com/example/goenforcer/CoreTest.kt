@@ -93,6 +93,8 @@ class CoreTest {
         s = Core.typeChar(s, 'a'); s = Core.typeSpace(s)
         assertFalse(Core.isComplete(s))
         s = Core.typeChar(s, 'b')
+        assertFalse(Core.isComplete(s)) // last word typed, but completion fires on its trailing space
+        s = Core.typeSpace(s)
         assertTrue(Core.isComplete(s))
     }
 

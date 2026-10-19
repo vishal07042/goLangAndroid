@@ -136,7 +136,25 @@ class AffirmationViewModel(app: Application, private val pm: Boolean) : AndroidV
             }
         }
 
-        if (Core.isComplete(_state.value.session)) complete()
+        if (Core.isComplete(_state.value.session)) {
+            complete()
+        } else {
+            // Auto-finish: the engine completes on the space AFTER the last
+            // word (prebuilt IME semantics). On this canvas the last word is
+            // the end of the text — advance the final space for the user so
+            // finishing the last word actually completes the session.
+            val s = _state.value.session
+            val last = s.words.lastOrNull()
+            if (last != null && !s.wrong &&
+                s.wordIndex == s.words.size - 1 && s.typedInWord == last.length
+            ) {
+                val advanced = Core.typeSpace(s)
+                if (Core.isComplete(advanced)) {
+                    _state.update { it.copy(session = advanced) }
+                    complete()
+                }
+            }
+        }
     }
 
     /** Enforcement handoff: session done → a11y OFF right away, next alarm armed. */

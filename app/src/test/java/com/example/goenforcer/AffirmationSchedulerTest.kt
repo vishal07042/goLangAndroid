@@ -156,8 +156,10 @@ class AffirmationBankTest {
 
     @Test
     fun `bank has the authored affirmations and no empties`() {
-        assertEquals(18, AffirmationStore.BANK.size)
+        // Count-free on purpose: the user keeps authoring new affirmations.
+        assertTrue(AffirmationStore.BANK.size >= 3)
         assertTrue(AffirmationStore.BANK.all { it.isNotBlank() })
+        assertTrue(AffirmationStore.BANK.distinct().size == AffirmationStore.BANK.size)
     }
 
     @Test

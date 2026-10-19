@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,6 +34,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -222,7 +225,7 @@ fun AffirmationScreen(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val vm: AffirmationViewModel = viewModel(factory = AffirmationViewModel.Factory(pm))
+    val vm: AffirmationViewModel = viewModel(factory = AffirmationViewModel.factory(pm))
     val state by vm.state.collectAsStateWithLifecycle()
 
     // ── One-shot effects: haptics, shake, toast (audio lives in the VM) ──
@@ -374,6 +377,15 @@ fun AffirmationScreen(
                                     letterSpacing = 0.sp
                                 ),
                                 cursorBrush = SolidColor(Color.Transparent),
+                                // Default system board (Gboard or any other):
+                                // no autocorrect / auto-capitalization /
+                                // suggestion-strip rewrites — the engine
+                                // compares exact characters.
+                                keyboardOptions = KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.None,
+                                    autoCorrectEnabled = false,
+                                    keyboardType = KeyboardType.Ascii
+                                ),
                                 modifier = Modifier.fillMaxSize().width(2000.dp),
                                 singleLine = false,
                                 readOnly = state.finished || state.celebrating

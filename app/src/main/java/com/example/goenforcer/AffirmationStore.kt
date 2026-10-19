@@ -39,8 +39,10 @@ object AffirmationStore {
         "Iron up, mood up.",
         "Lift iron, lift self-esteem.",
         "use it or lose it.",
-        "read aloud , retain longer"
-        "reps builds confidence"
+        "read aloud , retain longer",
+        "reps builds confidence",
+        "work not only builds skill but builds confidence too",
+        "use sunk cost fallacy to your advantage"
     )
 
     private fun sp(ctx: Context) =
