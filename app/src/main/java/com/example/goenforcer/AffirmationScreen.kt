@@ -57,10 +57,20 @@ private sealed class AffPiece {
     class Space(val text: String) : AffPiece()
 }
 
-private fun affBuildLines(segments: List<Segment>): List<List<AffPiece>> {
+/** One affirmation in the sequential reveal: its lines + its word range
+ *  within the global session (words run continuously across steps). */
+private data class AffStep(
+    val segments: List<Segment>,
+    val wordOffset: Int,
+    val wordCount: Int
+) {
+    val wordEnd: Int get() = wordOffset + wordCount
+}
+
+private fun affBuildLines(segments: List<Segment>, startWordIdx: Int = 0): List<List<AffPiece>> {
     val lines = mutableListOf<List<AffPiece>>()
     var cur = mutableListOf<AffPiece>()
-    var wordIdx = 0
+    var wordIdx = startWordIdx
 
     fun flush() {
         if (cur.isEmpty()) cur.add(AffPiece.Space(" "))
@@ -190,9 +200,10 @@ private fun AffCodeDisplay(
     segments: List<Segment>,
     session: Session,
     fillAmount: Float,
-    caretAlpha: Float
+    caretAlpha: Float,
+    wordOffset: Int = 0
 ) {
-    val lines = remember(segments) { affBuildLines(segments) }
+    val lines = remember(segments, wordOffset) { affBuildLines(segments, wordOffset) }
     Column {
         for (line in lines) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
@@ -276,6 +287,25 @@ fun AffirmationScreen(
         label = "affCaretAlpha"
     )
 
+    // ── Sequential steps: ONE affirmation visible at a time. Step N+1
+    //    stays fully hidden until step N is rewritten. The session's word
+    //    indices run continuously across all steps underneath. ──
+    val steps = remember(state.affirmations) {
+        var offset = 0
+        state.affirmations.map { text ->
+            val segs = AffirmationStore.wrappedSegments(text)
+            val count = Core.splitWords(
+                segs.filter { !it.comment && !it.boilerplate }.joinToString("") { it.text }
+            ).size
+            val step = AffStep(segs, offset, count)
+            offset += count
+            step
+        }
+    }
+    val activeStepIndex = steps.indexOfLast { state.wordsDone >= it.wordOffset }
+        .coerceIn(0, (steps.size - 1).coerceAtLeast(0))
+    val activeStep = steps.getOrNull(activeStepIndex)
+
     Box(modifier = Modifier.fillMaxSize().background(GoColors.Background).imePadding()) {
         Column(
             modifier = Modifier
@@ -293,12 +323,15 @@ fun AffirmationScreen(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (pm) "Evening Affirmation" else "Morning Affirmation",
+                        text = (if (pm) "Evening" else "Morning") + " Affirmation" +
+                            if (steps.size > 1) " \u00B7 ${activeStepIndex + 1}/${steps.size}" else "",
                         style = MaterialTheme.typography.titleMedium,
                         color = GoColors.TextPrimary
                     )
                     Text(
-                        text = "Rewrite all ${AffirmationStore.PICK_COUNT} affirmations to unlock your apps",
+                        text = if (steps.size > 1)
+                            "Affirmation ${activeStepIndex + 1} of ${steps.size} \u2014 one at a time"
+                        else "Rewrite it to unlock your apps",
                         style = MaterialTheme.typography.labelSmall,
                         color = GoColors.TextFaint
                     )
@@ -359,12 +392,17 @@ fun AffirmationScreen(
                                 .horizontalScroll(hScrollState)
                                 .verticalScroll(vScrollState)
                         ) {
-                            AffCodeDisplay(
-                                segments = state.segments,
-                                session = state.session,
-                                fillAmount = fillAmount,
-                                caretAlpha = caretAlpha
-                            )
+                            // Only the ACTIVE affirmation renders — later ones
+                            // are fully invisible until their turn.
+                            if (activeStep != null) {
+                                AffCodeDisplay(
+                                    segments = activeStep.segments,
+                                    session = state.session,
+                                    fillAmount = fillAmount,
+                                    caretAlpha = caretAlpha,
+                                    wordOffset = activeStep.wordOffset
+                                )
+                            }
 
                             BasicTextField(
                                 value = state.inputText,

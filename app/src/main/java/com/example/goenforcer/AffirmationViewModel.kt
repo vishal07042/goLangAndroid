@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 // (haptics / shake / toast). Survives rotation; no logic in composition.
 
 data class AffirmationUiState(
-    val affirmation: String = "",
+    val affirmations: List<String> = emptyList(),
     val segments: List<Segment> = emptyList(),
     val session: Session = Session(words = emptyList()),
     val inputText: String = "",
@@ -79,11 +79,12 @@ class AffirmationViewModel(app: Application, private val pm: Boolean) : AndroidV
     }
 
     private fun loadInitialState(): AffirmationUiState {
-        val text = AffirmationStore.windowText(getApplication(), pm)
+        val picks = AffirmationStore.windowPicks(getApplication(), pm)
+        val joined = picks.joinToString("\n")
         return AffirmationUiState(
-            affirmation = text,
-            segments = AffirmationStore.wrappedSegments(text),
-            session = Core.newSession(AffirmationStore.wrappedSegments(text))
+            affirmations = picks,
+            segments = AffirmationStore.wrappedSegments(joined),
+            session = Core.newSession(AffirmationStore.wrappedSegments(joined))
         )
     }
 

@@ -76,6 +76,10 @@ object AffirmationStore {
         return pick
     }
 
+    /** The picks as separate affirmations (one entry per affirmation). */
+    fun windowPicks(ctx: Context, pm: Boolean): List<String> =
+        windowText(ctx, pm).split('\n').filter { it.isNotBlank() }
+
     fun isDone(ctx: Context, pm: Boolean): Boolean {
         val key = if (pm) KEY_DONE_PM else KEY_DONE_AM
         return sp(ctx).getString(key, null) == Core.today()
