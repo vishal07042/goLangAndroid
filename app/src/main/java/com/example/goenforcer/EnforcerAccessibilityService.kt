@@ -34,7 +34,15 @@ class EnforcerAccessibilityService : AccessibilityService() {
             "android",
             "com.miui.home", "com.android.launcher",
             "com.google.android.apps.nexuslauncher",
-            "com.android.phone", "com.android.mms",
+            // Phone: dialer + in-call UI (stock AOSP, Google, Samsung) —
+            // taking a call must never be interrupted by enforcement.
+            "com.google.android.dialer",
+            "com.android.dialer",
+            "com.samsung.android.dialer",
+            "com.android.incallui",
+            "com.samsung.android.incallui",
+            "com.android.phone",
+            "com.android.mms",
             "com.google.android.permissioncontroller",
             "com.android.permissioncontroller"
         )
