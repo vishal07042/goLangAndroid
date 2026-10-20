@@ -23,9 +23,12 @@ class EnforcerAccessibilityService : AccessibilityService() {
         var instance: EnforcerAccessibilityService? = null
             private set
 
-        /** Apps the user always needs — closing these would trap them. */
+        /** Apps the user always needs — closing these would trap them.
+         *  com.cron.calendar = hourly logging app the user must be able to
+         *  use freely; enforcement resumes the moment they leave it. */
         private val PASS = setOf(
             BuildConfig.APPLICATION_ID,
+            "com.cron.calendar",
             "com.android.systemui",
             "com.android.settings",
             "android",
