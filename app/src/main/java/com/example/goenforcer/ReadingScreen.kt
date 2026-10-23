@@ -523,11 +523,19 @@ private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Fixed reading bar with the ORP focal letter highlighted.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FlashLetter(text = before, color = GoColors.TextPrimary, size = 44.sp)
+        // Fixed focal point: the ORP letter stays at screen centre while the
+        // word grows left/right around it (RSVP), so the eye never travels.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                FlashLetter(text = before, color = GoColors.TextPrimary, size = 44.sp)
+            }
             FlashLetter(text = focus, color = GoColors.Primary, size = 52.sp, emphasize = true)
-            FlashLetter(text = after, color = GoColors.TextPrimary, size = 44.sp)
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                FlashLetter(text = after, color = GoColors.TextPrimary, size = 44.sp)
+            }
         }
         Spacer(Modifier.height(24.dp))
         // WPM read-out + progress within the chunk.
