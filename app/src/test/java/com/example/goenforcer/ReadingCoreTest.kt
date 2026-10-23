@@ -330,4 +330,79 @@ class ReadingCoreTest {
         assertEquals(ha, hb)
         assertTrue(ha != hc)
     }
+
+    // ── Bundled Markdown → readable text ─────────────────────────────
+    @Test
+    fun `markdown strips syntax but keeps content`() {
+        val md = """
+            # Docker Basics
+            Use **images** and *containers* with `docker run`.
+
+            - build
+            - ship
+
+            See [the docs](https://example.com) and ![diagram](d.png).
+        """.trimIndent()
+
+        val plain = MarkdownText.toPlainText(md)
+
+        assertTrue(plain.contains("Docker Basics"))
+        assertTrue(plain.contains("images"))
+        assertTrue(plain.contains("containers"))
+        assertTrue(plain.contains("docker run"))
+        assertTrue(plain.contains("the docs"))
+        assertTrue(plain.contains("diagram"))
+        assertFalse(plain.contains("#"))
+        assertFalse(plain.contains("**"))
+        assertFalse(plain.contains("]("))
+        assertFalse(plain.contains("`"))
+    }
+
+    @Test
+    fun `markdown preserves identifiers with underscores`() {
+        val plain = MarkdownText.toPlainText("Call `train_test_split` and use snake_case_names.")
+        assertTrue(plain.contains("train_test_split"))
+        assertTrue(plain.contains("snake_case_names"))
+    }
+
+    @Test
+    fun `markdown keeps code generics intact`() {
+        val plain = MarkdownText.toPlainText("List<String> items = new ArrayList<>();")
+        assertTrue(plain.contains("List<String>"))
+    }
+
+    @Test
+    fun `markdown flattens tables and keeps fenced code text`() {
+        val md = """
+            | Name | Type |
+            |------|------|
+            | id   | int  |
+
+            ```kotlin
+            val x = 1
+            ```
+        """.trimIndent()
+
+        val plain = MarkdownText.toPlainText(md)
+
+        assertTrue(plain.contains("Name"))
+        assertTrue(plain.contains("Type"))
+        assertTrue(plain.contains("val x = 1"))
+        assertFalse(plain.contains("|"))
+        assertFalse(plain.contains("```"))
+    }
+
+    @Test
+    fun `markdown normalises line endings and collapses blank runs`() {
+        assertEquals("a\n\nb", MarkdownText.toPlainText("a\r\n\r\n\r\n\r\nb"))
+    }
+
+    @Test
+    fun `markdown output chunks deterministically`() {
+        val md = "##\n\n" + (1..90).joinToString(" ") { "word$it" }
+        val plain = MarkdownText.toPlainText(md)
+        val chunks = ReadingChunker.build(plain)
+        assertEquals(3, chunks.size)
+        assertEquals(30, chunks.first().words.size)
+    }
 }

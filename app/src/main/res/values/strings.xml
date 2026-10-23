@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Go Enforcer</string>
-    <string name="enforcer_service_desc">Keeps Go Enforcer in the foreground until you finish rewriting your morning affirmation. Enabled only during the 7:00 AM enforcement window, then turned off automatically.</string>
+    <string name="app_name">Enforcer</string>
+    <string name="enforcer_service_desc">Keeps Enforcer in the foreground until you finish rewriting your morning affirmation. Enabled only during the 7:00 AM enforcement window, then turned off automatically.</string>
     <string name="enforcer_notification_channel">Affirmation Enforcer</string>
     <string name="enforcer_notification_title">Morning affirmation due</string>
     <string name="enforcer_notification_text">Rewrite your affirmation to unlock your other apps.</string>

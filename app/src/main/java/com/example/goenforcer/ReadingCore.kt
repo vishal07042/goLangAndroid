@@ -28,7 +28,9 @@ data class ReadingDocument(
     val id: String,               // sha256 of normalised text → re-import never duplicates
     val title: String,
     val text: String,
-    val addedAt: Long
+    val addedAt: Long,
+    /** True for the Markdown cheat sheets bundled in the APK (read-only). */
+    val builtIn: Boolean = false
 )
 
 // ─── Text normalisation ────────────────────────────────────────────────
@@ -395,3 +397,55 @@ object ReadingPassRule {
     fun aloudPass(matched: Int, total: Int): Boolean =
         total > 0 && matched.toFloat() / total >= ALOUD_THRESHOLD
 }
+
+// ─── Markdown → readable text ──────────────────────────────────────────
+// The bundled cheat sheets are Markdown. Reading enforcement needs a clean
+// word stream, not syntax noise, so formatting is stripped while the actual
+// content (including identifiers like train_test_split) is preserved.
+object MarkdownText {
+
+    private val FENCE = Regex("^\\s*```.*$", RegexOption.MULTILINE)
+    private val HEADING = Regex("^\\s{0,3}#{1,6}\\s*", RegexOption.MULTILINE)
+    private val BULLET = Regex("^\\s{0,3}[-*+]\\s+", RegexOption.MULTILINE)
+    private val BLOCKQUOTE = Regex("^\\s{0,3}>\\s?", RegexOption.MULTILINE)
+    private val HR = Regex("^\\s{0,3}([-*_])(\\s*\\1){2,}\\s*$", RegexOption.MULTILINE)
+    private val IMAGE = Regex("!\\[([^]]*)]\\([^)]*\\)")
+    private val LINK = Regex("\\[([^]]*)]\\([^)]*\\)")
+    private val INLINE_CODE = Regex("`([^`]*)`")
+    // Word-boundary guards keep snake_case and identifiers intact.
+    private val BOLD = Regex("\\*\\*(.+?)\\*\\*")
+    private val BOLD_U = Regex("(?<![\\w])__(.+?)__(?![\\w])")
+    private val ITALIC_STAR = Regex("(?<![\\w])\\*(.+?)\\*(?![\\w])")
+    private val ITALIC_U = Regex("(?<![\\w])_(.+?)_(?![\\w])")
+    private val HTML_COMMENT = Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL)
+    // Only real HTML tags — never generics like List<String> in code samples.
+    private val HTML_TAG = Regex(
+        "</?(?:br|p|div|span|a|img|b|i|em|strong|ul|ol|li|code|pre|blockquote|table|thead|tbody|tr|td|th|h[1-6])\\s*/?>",
+        RegexOption.IGNORE_CASE
+    )
+    private val TABLE_SEP = Regex("^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$", RegexOption.MULTILINE)
+    private val MULTI_BLANK = Regex("\n{3,}")
+
+    fun toPlainText(raw: String): String {
+        var t = raw.replace("\r\n", "\n").replace('\r', '\n')
+        t = FENCE.replace(t, "")
+        t = TABLE_SEP.replace(t, "")
+        t = IMAGE.replace(t, "$1")
+        t = LINK.replace(t, "$1")
+        t = HTML_COMMENT.replace(t, "")
+        t = HTML_TAG.replace(t, " ")
+        t = INLINE_CODE.replace(t, "$1")
+        t = BOLD.replace(t, "$1")
+        t = BOLD_U.replace(t, "$1")
+        t = ITALIC_STAR.replace(t, "$1")
+        t = ITALIC_U.replace(t, "$1")
+        t = HEADING.replace(t, "")
+        t = BULLET.replace(t, "")
+        t = BLOCKQUOTE.replace(t, "")
+        t = HR.replace(t, "")
+        t = t.replace('|', ' ')
+        t = MULTI_BLANK.replace(t, "\n\n")
+        return t.lines().joinToString("\n") { it.trimEnd() }.trim()
+    }
+}
+

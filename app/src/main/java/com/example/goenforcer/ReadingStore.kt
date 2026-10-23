@@ -53,8 +53,8 @@ object ReadingStore {
 
     fun documents(ctx: Context): List<ReadingDocument> {
         val s = sp(ctx)
-        val ids = s.getStringSet(KEY_DOCS, null) ?: return emptyList()
-        return ids.mapNotNull { id ->
+        val ids = s.getStringSet(KEY_DOCS, null) ?: emptySet()
+        val pasted = ids.mapNotNull { id ->
             val text = s.getString(KEY_PREFIX_TEXT + id, null) ?: return@mapNotNull null
             ReadingDocument(
                 id = id,
@@ -63,9 +63,12 @@ object ReadingStore {
                 addedAt = s.getLong(KEY_PREFIX_ADDED + id, 0L)
             )
         }.sortedByDescending { it.addedAt }
+        // Built-ins first: they are the library, not an afterthought.
+        return ReadingAssets.documents(ctx) + pasted
     }
 
     fun document(ctx: Context, id: String): ReadingDocument? {
+        if (ReadingAssets.isAssetId(id)) return ReadingAssets.document(ctx, id)
         val s = sp(ctx)
         val text = s.getString(KEY_PREFIX_TEXT + id, null) ?: return null
         return ReadingDocument(
@@ -112,6 +115,8 @@ object ReadingStore {
     fun setSlideStreak(ctx: Context, n: Int) { sp(ctx).edit().putInt(KEY_SLIDE_STREAK, n).apply() }
 
     fun removeDocument(ctx: Context, id: String) {
+        // Bundled content ships with the app and cannot be deleted.
+        if (ReadingAssets.isAssetId(id)) return
         val s = sp(ctx)
         val ids = s.getStringSet(KEY_DOCS, null)?.toMutableSet() ?: mutableSetOf()
         ids.remove(id)

@@ -7,8 +7,8 @@ import androidx.activity.enableEdgeToEdge
 
 // ─── Reading Enforcement host ──────────────────────────────────────────
 // Separate activity (same pattern as AffirmationActivity) so the reader can
-// be launched from the Home card or an intent without disturbing the Go app.
-// No enforcement is wired yet — this is the reading surface only.
+// be launched from the Enforcer dashboard. No enforcement is wired yet —
+// this is the reading surface only.
 class ReadingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

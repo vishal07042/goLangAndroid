@@ -199,8 +199,7 @@ private fun ReadingLibraryScreen(
 }
 
 @Composable
-private fun EmptyReadingState() {
-    Column(
+private fun EmptyReadingState() {    Column(
         modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -223,6 +222,21 @@ private fun EmptyReadingState() {
 }
 
 @Composable
+private fun BuiltInBadge() {
+    Text(
+        text = "BUNDLED",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = GoColors.AccentTeal,
+        letterSpacing = 0.8.sp,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(GoColors.AccentTeal.copy(alpha = 0.10f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    )
+}
+
+@Composable
 private fun DocumentCard(
     doc: ReadingDocument,
     lastPassed: Int,
@@ -242,7 +256,18 @@ private fun DocumentCard(
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(doc.title, style = MaterialTheme.typography.titleMedium, color = GoColors.TextPrimary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            doc.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = GoColors.TextPrimary,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (doc.builtIn) {
+                            Spacer(Modifier.width(8.dp))
+                            BuiltInBadge()
+                        }
+                    }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "$read / $chunks chunks",
@@ -250,8 +275,11 @@ private fun DocumentCard(
                         color = GoColors.TextFaint
                     )
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = GoColors.TextFaint)
+                // Bundled cheat sheets are read-only — no delete affordance.
+                if (!doc.builtIn) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = GoColors.TextFaint)
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

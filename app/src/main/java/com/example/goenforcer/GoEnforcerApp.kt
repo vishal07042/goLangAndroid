@@ -55,68 +55,11 @@ enum class NavTab(val icon: ImageVector, val label: String) {
 @Composable
 fun GoEnforcerApp() {
     GoEnforcerTheme {
-        var screen by rememberSaveable { mutableStateOf("main") }
-        var currentTab by rememberSaveable { mutableStateOf(NavTab.Learn) }
-        var selectedSnippet by remember { mutableStateOf<SnippetContent?>(null) }
-        val context = LocalContext.current
-
-        val dailySnippet = remember { ContentStore.getDailySnippet(context) }
-        
-        val activeSnippet = selectedSnippet ?: dailySnippet
-        val challenge = remember(activeSnippet) {
-            val segments = Core.decodeSegments(activeSnippet.rawCode)
-            ChallengeData(segments, Core.newSession(segments))
-        }
-
-        if (screen == "challenge") {
-            ChallengeScreen(
-                segments = challenge.segments,
-                initialSession = challenge.session,
-                onComplete = { correct, wrong ->
-                    Store.complete(
-                        context,
-                        snippetWords = challenge.session.words.size,
-                        correctChars = correct,
-                        wrongKeys = wrong
-                    )
-                },
-                onBack = { 
-                    screen = "main"
-                    selectedSnippet = null
-                }
-            )
-        } else {
-            Scaffold(
-                containerColor = GoColors.Background,
-                bottomBar = {
-                    BottomNavBar(
-                        selectedTab = currentTab,
-                        onTabSelected = { currentTab = it }
-                    )
-                }
-            ) { padding ->
-                Box(modifier = Modifier.padding(padding)) {
-                    AnimatedContent(
-                        targetState = currentTab,
-                        transitionSpec = {
-                            fadeIn() togetherWith fadeOut()
-                        },
-                        label = "tabTransition"
-                    ) { targetTab ->
-                        when (targetTab) {
-                            NavTab.Learn -> HomeScreen(onChallenge = { screen = "challenge" })
-                            NavTab.Sprint -> SprintScreen(onBack = { currentTab = NavTab.Learn })
-                            NavTab.Path -> PathScreen(onSnippetSelected = { 
-                                selectedSnippet = it
-                                screen = "challenge"
-                            })
-                            NavTab.Leader -> LeaderboardScreen()
-                            NavTab.Stats -> StatsScreen()
-                        }
-                    }
-                }
-            }
-        }
+        // Enforcer-only entry surface. The Go learning screens
+        // (HomeScreen / SprintScreen / PathScreen / LeaderboardScreen /
+        // StatsScreen / ChallengeScreen) are kept in the codebase but are
+        // deliberately unreachable from the UI.
+        EnforcerHomeScreen()
     }
 }
 
