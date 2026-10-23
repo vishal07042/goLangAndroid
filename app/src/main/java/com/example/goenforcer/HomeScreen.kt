@@ -338,6 +338,54 @@ fun HomeScreen(onChallenge: () -> Unit) {
                 }
             }
 
+            // ── Reading Enforcement (30-word verified chunks) ──
+            item {
+                PremiumCard(modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(GoColors.AccentTeal)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "READING ENFORCEMENT",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = GoColors.TextFaint,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "Read in 30-word chunks",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = GoColors.TextPrimary
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Verify each chunk by retyping, reading aloud, sliding, drag & drop, or flash (RSVP).",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = GoColors.TextMuted
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        TactileButton(
+                            text = "Open reader",
+                            onClick = {
+                                context.startActivity(
+                                    android.content.Intent(context, ReadingActivity::class.java)
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            topColor = GoColors.AccentTeal,
+                            bottomColor = Color(0xFF007A70),
+                            edgeColor = Color(0xFF007A70)
+                        )
+                    }
+                }
+            }
+
             // ── Intelligence Row (Stats) ──
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
