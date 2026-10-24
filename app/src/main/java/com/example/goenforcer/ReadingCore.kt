@@ -213,59 +213,12 @@ object Rsvp {
 }
 
 // ─── Retype mode ───────────────────────────────────────────────────────
-// Advance only when the typed buffer matches the current word (case and
-// trailing punctuation insensitive). A non-prefix mismatch shakes + counts
-// an error but never advances. Pass is 100% by construction.
-data class RetypeState(
-    val cursor: Int = 0,
-    val typed: String = "",
-    val wrong: Boolean = false,
-    val errors: Int = 0,
-    val matched: Int = 0
-) {
-    val passed: Boolean get() = wrong.not() && matched > 0
-}
-
-object RetypeLogic {
-
-    /** Feed one typed character. Returns the state, plus whether it was an error. */
-    fun onChar(state: RetypeState, expected: List<String>, ch: Char): RetypeState {
-        if (state.cursor >= expected.size) return state
-        val target = ReadingText.normalize(expected[state.cursor])
-        val next = state.typed + ch
-        val normNext = ReadingText.normalize(next)
-        return when {
-            // Typed text is no longer a prefix of the target → mismatch.
-            target.startsWith(normNext) ->
-                state.copy(typed = next, wrong = false)
-            else ->
-                state.copy(typed = next, wrong = true, errors = state.errors + 1)
-        }
-    }
-
-    fun onBackspace(state: RetypeState): RetypeState =
-        if (state.typed.isEmpty()) state.copy(wrong = false)
-        else state.copy(typed = state.typed.dropLast(1), wrong = false)
-
-    /**
-     * Try to close the current word (space pressed, or exact match typed).
-     * Only succeeds on a full, correct match — otherwise it's a no-op.
-     */
-    fun commit(state: RetypeState, expected: List<String>): RetypeState {
-        if (state.cursor >= expected.size) return state
-        val target = ReadingText.normalize(expected[state.cursor])
-        val typedNorm = ReadingText.normalize(state.typed)
-        if (typedNorm.isEmpty() || typedNorm != target) {
-            // Wrong word committed → shake + error, don't advance.
-            return if (state.typed.isNotEmpty()) state.copy(wrong = true, errors = state.errors + 1) else state
-        }
-        val next = state.copy(typed = "", wrong = false, matched = state.matched + 1)
-        return next.copy(cursor = next.cursor + 1)
-    }
-
-    fun ratio(state: RetypeState, total: Int): Float =
-        if (total == 0) 0f else state.matched.toFloat() / total
-}
+// The retype engine is the ORIGINAL Go Enforcer typing core (GoEnforcerCore
+// Core.typeChar / typeSpace / backspace): per-letter exact matching, a wrong
+// key locks the word until backspace, space commits a fully-typed word, and
+// backspace reaches back into previous words. A chunk therefore passes 100%
+// by construction. (The old normalised RetypeLogic was removed — typing is
+// now identical to the Go challenge and the affirmation screen.)
 
 // ─── Slide mode ────────────────────────────────────────────────────────
 // One gesture moves one word, and a pace floor rejects flicks so the whole

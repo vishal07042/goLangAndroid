@@ -2,6 +2,7 @@ package com.example.goenforcer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.SystemClock
 import android.speech.SpeechRecognizer
@@ -18,6 +19,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -40,6 +43,7 @@ import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Swipe
@@ -69,12 +73,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -92,6 +101,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 // ─── Reading Enforcement screen ────────────────────────────────────────
@@ -106,13 +116,53 @@ fun ReadingScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
+    // Audio feedback straight from the original Go Enforcer challenge:
+    // correct key-tick on word commits, error buzz on rejected keys.
+    val correctPlayer = remember { MediaPlayer.create(context, R.raw.correct) }
+    val incorrectPlayer = remember { MediaPlayer.create(context, R.raw.incorrect) }
+    DisposableEffect(Unit) {
+        onDispose {
+            correctPlayer?.release()
+            incorrectPlayer?.release()
+        }
+    }
+    fun playSound(player: MediaPlayer?) {
+        player?.let {
+            try {
+                if (it.isPlaying) {
+                    it.pause()
+                    it.seekTo(0)
+                }
+                it.start()
+            } catch (_: Exception) {
+                // Audio safety
+            }
+        }
+    }
+
+    // Error shake — same treatment as the original challenge canvas.
+    val shake = remember { Animatable(0f) }
+
     var sessionId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         vm.effects.collect { e ->
             when (e) {
-                ReadingEffect.WordCorrect -> haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                ReadingEffect.WordWrong -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                ReadingEffect.CharTick -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                ReadingEffect.WordCorrect -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    if (vm.state.value.mode == ReadingMode.RETYPE) playSound(correctPlayer)
+                }
+                ReadingEffect.WordWrong -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    if (vm.state.value.mode == ReadingMode.RETYPE) {
+                        playSound(incorrectPlayer)
+                        for (dx in listOf(-10f, 10f, -7f, 7f, -4f, 4f, 0f)) {
+                            shake.animateTo(dx, tween(40, easing = LinearEasing))
+                        }
+                        shake.snapTo(0f)
+                    }
+                }
                 ReadingEffect.ChunkPassed -> {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     Toast.makeText(context, "Chunk passed", Toast.LENGTH_SHORT).show()
@@ -139,6 +189,7 @@ fun ReadingScreen(onBack: () -> Unit) {
             ReadingReaderScreen(
                 vm = vm,
                 state = state,
+                shakeX = shake.value,
                 onClose = { sessionId = null }
             )
         }
@@ -316,6 +367,7 @@ private fun DocumentCard(
 private fun ReadingReaderScreen(
     vm: ReadingViewModel,
     state: ReadingUiState,
+    shakeX: Float = 0f,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
@@ -420,8 +472,14 @@ private fun ReadingReaderScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // Mode body — one of five, interchangeable behind ReadingMode.
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        // Mode body — one of six, interchangeable behind ReadingMode.
+        // The card shakes on a rejected key, exactly like the Go challenge.
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .graphicsLayer { translationX = shakeX }
+        ) {
             when (state.mode) {
                 ReadingMode.FLASH -> FlashBody(vm, state)
                 ReadingMode.DRAG -> DragBody(vm, state)
@@ -434,6 +492,7 @@ private fun ReadingReaderScreen(
             ReadingMode.RETYPE -> RetypeFooter(vm, state)
             ReadingMode.FLASH -> FlashFooter(vm, state)
             ReadingMode.ALOUD -> AloudFooter(state)
+            ReadingMode.LONGPRESS -> LongPressFooter(state)
             else -> {}
         }
 
@@ -450,10 +509,46 @@ private fun ReadingReaderScreen(
     )
 }
 
-// ─── Paragraph body (retype / slide / drag / aloud) ────────────────────
+// ─── Paragraph body (retype / swipe out / long press / aloud) ───────────
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ParagraphBody(vm: ReadingViewModel, state: ReadingUiState) {
     val chunk = state.chunk ?: return
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    val retypeMode = state.mode == ReadingMode.RETYPE
+    val holdMode = state.mode == ReadingMode.LONGPRESS
+    val throwMode = state.mode == ReadingMode.SLIDE &&
+        state.slideVariant == ReadingStore.SlideVariant.OUT
+    val strikeMode = state.mode == ReadingMode.SLIDE &&
+        state.slideVariant == ReadingStore.SlideVariant.STRIKE
+
+    // Retype chrome, ported from the Go challenge canvas: animated word fill
+    // + slow caret blink.
+    val caretAlpha by rememberInfiniteTransition(label = "caret").animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "caretAlpha"
+    )
+    val currentLen = chunk.words.getOrNull(state.cursor)?.length?.coerceAtLeast(1) ?: 1
+    val fillAmount by animateFloatAsState(
+        targetValue = if (retypeMode) state.typedInWord.toFloat() / currentLen else 0f,
+        animationSpec = tween(150),
+        label = "wordFill"
+    )
+
+    // Swipe out (throw): the current chip follows the finger, then flies off
+    // the window along the drag direction once released far enough.
+    var throwOffset by remember { mutableStateOf(Offset.Zero) }
+    var throwing by remember { mutableStateOf(false) }
+    var canvasSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val throwThreshold = with(density) { 72.dp.toPx() }
 
     // Original Go Enforcer canvas: monospace code chips with per-word states,
     // flowing and wrapping naturally.
@@ -463,14 +558,120 @@ private fun ParagraphBody(vm: ReadingViewModel, state: ReadingUiState) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
-        ReadingWordFlow(
-            words = chunk.words,
-            states = state.wordStates,
-            modifier = Modifier.fillMaxWidth(),
-            onWordTap = if (state.mode == ReadingMode.SLIDE) {
-                ({ idx -> if (idx == state.cursor) vm.onSlideGesture(SystemClock.elapsedRealtime()) })
-            } else null
-        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().onSizeChanged { canvasSize = it },
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            chunk.words.forEachIndexed { idx, word ->
+                val isCurrent = idx == state.cursor
+                val chipState = state.wordStates.getOrElse(idx) { WordState.UPCOMING }
+
+                // Retype: the active word carries the typed/caret/untyped chrome.
+                if (retypeMode && isCurrent) {
+                    ReadingActiveWordChip(
+                        word = word,
+                        typed = state.typedInWord,
+                        wrong = state.retypeWrong,
+                        fillAmount = fillAmount,
+                        caretAlpha = caretAlpha
+                    )
+                    return@forEachIndexed
+                }
+
+                var chipMod: Modifier = Modifier
+                if (isCurrent && throwMode) {
+                    chipMod = Modifier
+                        .zIndex(if (throwOffset != Offset.Zero || throwing) 10f else 0f)
+                        .graphicsLayer {
+                            translationX = throwOffset.x
+                            translationY = throwOffset.y
+                        }
+                        .pointerInput(state.cursor) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    if (!throwing) {
+                                        throwOffset = Offset.Zero
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                },
+                                onDragEnd = {
+                                    if (throwing) {
+                                        // already flying
+                                    } else {
+                                        val dist = throwOffset.getDistance()
+                                        if (dist > throwThreshold) {
+                                            val dir = throwOffset / dist
+                                            val w = canvasSize.width.toFloat()
+                                            val h = canvasSize.height.toFloat()
+                                            val fly = kotlin.math.sqrt(w * w + h * h) + 8f
+                                            val start = throwOffset
+                                            val target = Offset(dir.x * fly, dir.y * fly)
+                                            throwing = true
+                                            vm.onSlideGesture(SystemClock.elapsedRealtime())
+                                            scope.launch {
+                                                animate(
+                                                    initialValue = 0f,
+                                                    targetValue = 1f,
+                                                    animationSpec = tween(180, easing = FastOutLinearInEasing)
+                                                ) { f, _ ->
+                                                    throwOffset = Offset(
+                                                        start.x + (target.x - start.x) * f,
+                                                        start.y + (target.y - start.y) * f
+                                                    )
+                                                }
+                                                throwOffset = Offset.Zero
+                                                throwing = false
+                                            }
+                                        } else {
+                                            throwOffset = Offset.Zero
+                                        }
+                                    }
+                                },
+                                onDragCancel = { if (!throwing) throwOffset = Offset.Zero },
+                                onDrag = { change, delta ->
+                                    if (!throwing) {
+                                        change.consume()
+                                        throwOffset += delta
+                                    }
+                                }
+                            )
+                        }
+                }
+                if (isCurrent && holdMode) {
+                    // Long press: hold the word to confirm. Slop movement cancels
+                    // so the flow can still scroll; the VM owns the timer.
+                    chipMod = chipMod
+                        .zIndex(1f)
+                        .pointerInput(state.cursor) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                vm.onLongPressStart()
+                                var moved = false
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (change.changedToUpIgnoreConsumed()) break
+                                    if (!moved && change.positionChange().getDistance() > viewConfiguration.touchSlop) {
+                                        moved = true
+                                        vm.onLongPressEnd()
+                                    }
+                                }
+                                vm.onLongPressEnd()
+                            }
+                        }
+                }
+
+                ReadingWordChip(
+                    word = word,
+                    state = chipState,
+                    modifier = chipMod,
+                    onTap = if (isCurrent && strikeMode) {
+                        ({ vm.onSlideGesture(SystemClock.elapsedRealtime()) })
+                    } else null
+                )
+            }
+        }
     }
 }
 
@@ -524,31 +725,21 @@ private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
 // ─── Footers ───────────────────────────────────────────────────────────
 @Composable
 private fun RetypeFooter(vm: ReadingViewModel, state: ReadingUiState) {
-    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focusRequester = remember { FocusRequester() }
     // Open the keyboard when the chunk/mode starts, and keep it open on advance.
     LaunchedEffect(state.chunkIndex, state.mode, state.passed) {
         if (!state.passed) runCatching { focusRequester.requestFocus() }
     }
 
-    // Hidden field: paste disabled by prefix-filtering, no suggestions/autocorrect.
+    // Hidden field, exactly like the original challenge: the chip canvas is
+    // the display; this field only captures raw keystrokes (no suggestions,
+    // no paste — single-char events replay through the VM).
     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         BasicTextField(
-            value = state.retypeTyped,
-            onValueChange = { new ->
-                val old = state.retypeTyped
-                if (new.length > old.length) {
-                    // Ignore multi-char inserts (paste): only accept one char at a time.
-                    if (new.length - old.length == 1) vm.onRetypeChar(new.last())
-                } else if (new.length < old.length) {
-                    repeat(old.length - new.length) { vm.onRetypeBackspace() }
-                }
-            },
-            textStyle = TextStyle(
-                color = GoColors.TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            cursorBrush = SolidColor(GoColors.Primary),
+            value = state.retypeField,
+            onValueChange = vm::onRetypeEdit,
+            textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
+            cursorBrush = SolidColor(Color.Transparent),
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
                 autoCorrectEnabled = false,
@@ -557,13 +748,41 @@ private fun RetypeFooter(vm: ReadingViewModel, state: ReadingUiState) {
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
-                .focusRequester(focusRequester)
+                .height(44.dp)
+                .focusRequester(focusRequester),
+            decorationBox = { inner ->
+                Box(
+                    contentAlignment = Alignment.CenterStart,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    inner()
+                    Text(
+                        "Type the highlighted word — space commits it",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = GoColors.TextFaint
+                    )
+                }
+            }
         )
-        if (state.retypeTyped.isEmpty()) {
-            Text(
-                "Type the highlighted word…",
-                color = GoColors.TextFaint,
-                modifier = Modifier.align(Alignment.CenterStart)
+    }
+}
+
+// ─── Long-press footer ─────────────────────────────────────────────────
+@Composable
+private fun LongPressFooter(state: ReadingUiState) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Text(
+            "Press & hold the highlighted word until the bar fills",
+            style = MaterialTheme.typography.labelSmall,
+            color = GoColors.TextFaint
+        )
+        if (state.holdProgress > 0f) {
+            Spacer(Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { state.holdProgress },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                color = GoColors.Primary,
+                trackColor = GoColors.Surface
             )
         }
     }
@@ -882,6 +1101,7 @@ fun modeIcon(mode: ReadingMode) = when (mode) {
     ReadingMode.RETYPE -> Icons.Filled.Keyboard
     ReadingMode.ALOUD -> Icons.Filled.Mic
     ReadingMode.SLIDE -> Icons.Filled.Swipe
+    ReadingMode.LONGPRESS -> Icons.Filled.PanTool
     ReadingMode.DRAG -> Icons.Filled.TouchApp
     ReadingMode.FLASH -> Icons.Filled.FlashOn
 }
@@ -956,9 +1176,10 @@ private fun ModeRow(mode: ReadingMode, selected: Boolean, onClick: () -> Unit) {
 }
 
 private fun modeDescription(mode: ReadingMode): String = when (mode) {
-    ReadingMode.RETYPE -> "Type each word · 100% pass"
+    ReadingMode.RETYPE -> "Type each word exactly · 100% pass"
     ReadingMode.ALOUD -> "Say each word · ≥80% pass"
-    ReadingMode.SLIDE -> "Swipe each word away · one gesture per word"
+    ReadingMode.SLIDE -> "Throw each word out of the window"
+    ReadingMode.LONGPRESS -> "Hold each word to confirm · quiet"
     ReadingMode.DRAG -> "Drop the right word into the gap"
     ReadingMode.FLASH -> "Words flash at your reading speed (RSVP)"
 }
@@ -981,10 +1202,10 @@ private fun ReadingSettingsDialog(vm: ReadingViewModel, onDismiss: () -> Unit) {
                 Text("Reading settings", style = MaterialTheme.typography.titleMedium, color = GoColors.TextPrimary)
                 Spacer(Modifier.height(18.dp))
 
-                Text("Slide variant", style = MaterialTheme.typography.labelMedium, color = GoColors.TextPrimary)
+                Text("Swipe out variant", style = MaterialTheme.typography.labelMedium, color = GoColors.TextPrimary)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VariantChip("Slide out", variant == ReadingStore.SlideVariant.OUT, Modifier.weight(1f)) {
+                    VariantChip("Throw out", variant == ReadingStore.SlideVariant.OUT, Modifier.weight(1f)) {
                         variant = ReadingStore.SlideVariant.OUT; vm.setSlideVariant(variant)
                     }
                     VariantChip("Strikethrough", variant == ReadingStore.SlideVariant.STRIKE, Modifier.weight(1f)) {

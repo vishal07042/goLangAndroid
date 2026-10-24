@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -13,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,12 +33,13 @@ enum class ReadingMode(
 ) {
     RETYPE("Retype", eligibleForGate = true),
     ALOUD("Read aloud", requiresMic = true, eligibleForGate = true),
-    SLIDE("Slide"),
+    SLIDE("Swipe out"),
+    LONGPRESS("Long press"),
     DRAG("Drag & drop", eligibleForGate = true),
     FLASH("Flash");
 
     /** Modes quiet mode (meetings/train/night) may still use. */
-    val quietSafe: Boolean get() = this == RETYPE || this == SLIDE || this == DRAG || this == FLASH
+    val quietSafe: Boolean get() = this != ALOUD
 
     companion object {
         /** Gate picks randomly between read-aloud and retype (spec default). */
@@ -48,6 +51,7 @@ enum class ReadingMode(
 }
 
 sealed interface ReadingEffect {
+    data object CharTick : ReadingEffect   // one correct keystroke (retype)
     data object WordCorrect : ReadingEffect
     data object WordWrong : ReadingEffect
     data object ChunkPassed : ReadingEffect
@@ -68,11 +72,17 @@ data class ReadingUiState(
     val matched: Int = 0,
     val passed: Boolean = false,
     val showingContext: Boolean = true,
-    val retypeTyped: String = "",
+    // Retype — the raw keystroke field (grows for the whole chunk, exactly
+    // like the original Go challenge input) plus per-word typing state.
+    val retypeField: String = "",
+    val typedInWord: Int = 0,
     val retypeWrong: Boolean = false,
     // Slide
     val slideVariant: ReadingStore.SlideVariant = ReadingStore.SlideVariant.OUT,
     val lastSlideAtMs: Long = 0L,
+    // Long press
+    val holding: Boolean = false,
+    val holdProgress: Float = 0f,
     // Drag
     val tray: List<String> = emptyList(),
     // Flash
@@ -110,6 +120,9 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
     // Read aloud
     private var recognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    // Long-press hold timer (drives the footer/chip fill from the VM).
+    private var holdJob: kotlinx.coroutines.Job? = null
 
     // ── Library ──
     fun documents(): List<ReadingDocument> = ReadingStore.documents(getApplication())
@@ -184,8 +197,11 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
                 errors = 0,
                 matched = 0,
                 passed = false,
-                retypeTyped = "",
+                retypeField = "",
+                typedInWord = 0,
                 retypeWrong = false,
+                holding = false,
+                holdProgress = 0f,
                 tray = if (mode == ReadingMode.DRAG) DragDeck.deal(chunk.words, 0, chunk.seq) else emptyList(),
                 flashIndex = 0,
                 flashPlaying = false,
@@ -289,51 +305,101 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
         startListening()
     }
 
-    // ── Retype ──
-    fun onRetypeChar(ch: Char) {
+    // ── Retype — the original Go Enforcer typing engine ──
+    // Same rules as Core.typeChar / typeSpace / backspace: every letter must
+    // match exactly (position by position), one wrong key LOCKS the word until
+    // you backspace, space only commits a fully-typed word, and backspace can
+    // reach back into already-typed words. Nothing is normalised — like the
+    // affirmation screen, which runs on the same engine.
+
+    /** Typographic folds so phone keyboards can type doc punctuation. */
+    private fun retypeFold(c: Char): Char = when {
+        c == '\u2019' || c == '\u2018' || c == '`' -> '\''
+        c == '\u201C' || c == '\u201D' -> '"'
+        c == '\u2014' || c == '\u2013' -> '-'
+        else -> c
+    }
+
+    private fun retypeKeyMatches(expected: Char, typed: Char): Boolean =
+        expected == typed || retypeFold(expected) == retypeFold(typed)
+
+    /**
+     * Feed the whole field edit through the typing state — mirrors
+     * ChallengeScreen.processChange: replays every inserted char, replays
+     * every removal as a backspace. Emits one effect per event so the view
+     * can click, beep and shake exactly like the original.
+     */
+    fun onRetypeEdit(newValue: String) {
         if (_state.value.mode != ReadingMode.RETYPE || _state.value.passed) return
         val chunk = _state.value.chunk ?: return
-        var st = _state.value
-        val before = st.cursor
-        // Fold the char through RetypeLogic against the current word.
-        val cur = chunk.words[st.cursor]
-        val nextTyped = st.retypeTyped + ch
-        val target = ReadingText.normalize(cur)
-        val normNext = ReadingText.normalize(nextTyped)
-        if (target.startsWith(normNext)) {
-            _state.update { it.copy(retypeTyped = nextTyped, retypeWrong = false) }
-            if (normNext == target) {
-                // Exact match → advance.
-                _state.update { it.copy(matched = it.matched + 1) }
-                emit(ReadingEffect.WordCorrect)
-                advanceTo(before + 1)
+        val old = _state.value.retypeField
+
+        var cursor = _state.value.cursor
+        var typedIn = _state.value.typedInWord
+        var wrong = _state.value.retypeWrong
+        var errors = _state.value.errors
+
+        var charTicked = false      // ≥1 correct letter
+        var wordCommitted = false   // ≥1 space commit
+        var wrongKeyed = false      // ≥1 rejected key
+
+        if (newValue.length > old.length) {
+            for (i in old.length until newValue.length) {
+                val ch = newValue[i]
+                val word = chunk.words.getOrNull(cursor)
+                if (word == null || word.isEmpty()) break
+                if (ch == ' ') {
+                    // Original typeSpace: a space only commits a FULLY typed
+                    // word; a partial word + space is silently ignored.
+                    if (typedIn >= word.length && !wrong) {
+                        cursor += 1
+                        typedIn = 0
+                        wordCommitted = true
+                    }
+                } else if (wrong) {
+                    // Locked until backspace — typing is frozen (Core.typeChar).
+                } else if (typedIn >= word.length) {
+                    // Word fully typed but something else pressed → wrong.
+                    wrong = true; errors += 1; wrongKeyed = true
+                } else if (retypeKeyMatches(word[typedIn], ch)) {
+                    typedIn += 1
+                    charTicked = true
+                } else {
+                    wrong = true; errors += 1; wrongKeyed = true
+                }
             }
-        } else {
-            _state.update { it.copy(retypeTyped = nextTyped, retypeWrong = true, errors = it.errors + 1) }
-            emit(ReadingEffect.WordWrong)
+        } else if (newValue.length < old.length) {
+            repeat(old.length - newValue.length) {
+                // Core.backspace: clear the lock first, un-type a letter, then
+                // step back into the previous word at its full length.
+                when {
+                    wrong -> wrong = false
+                    typedIn > 0 -> typedIn -= 1
+                    cursor > 0 -> {
+                        cursor -= 1
+                        typedIn = chunk.words[cursor].length
+                    }
+                }
+            }
         }
-    }
 
-    fun onRetypeSpace() {
-        if (_state.value.mode != ReadingMode.RETYPE || _state.value.passed) return
-        val chunk = _state.value.chunk ?: return
-        val st = _state.value
-        if (st.cursor >= chunk.words.size) return
-        val target = ReadingText.normalize(chunk.words[st.cursor])
-        val typed = ReadingText.normalize(st.retypeTyped)
-        if (typed == target) {
-            _state.update { it.copy(retypeTyped = "", retypeWrong = false, matched = it.matched + 1) }
-            emit(ReadingEffect.WordCorrect)
-            advanceTo(st.cursor + 1)
-        } else {
-            _state.update { it.copy(retypeWrong = true, errors = it.errors + 1) }
-            emit(ReadingEffect.WordWrong)
+        val oldCursor = _state.value.cursor
+        _state.update {
+            it.copy(
+                cursor = cursor,
+                typedInWord = typedIn,
+                retypeWrong = wrong,
+                errors = errors,
+                retypeField = newValue
+            )
         }
-    }
-
-    fun onRetypeBackspace() {
-        if (_state.value.mode != ReadingMode.RETYPE || _state.value.passed) return
-        _state.update { it.copy(retypeTyped = it.retypeTyped.dropLast(1), retypeWrong = false) }
+        setWordStates(cursor, missedSoFar)
+        if (wrongKeyed) emit(ReadingEffect.WordWrong)
+        if (wordCommitted) emit(ReadingEffect.WordCorrect)
+        if (charTicked && !wordCommitted && !wrongKeyed) emit(ReadingEffect.CharTick)
+        // Shared cursor bookkeeping: pass handling on the last commit,
+        // consistent matched/wordStates on cross-word backspace.
+        if (cursor != oldCursor) advanceTo(cursor)
     }
 
     // ── Slide ──
@@ -347,6 +413,47 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(lastSlideAtMs = nowMs) }
         emit(ReadingEffect.WordCorrect)
         advanceTo(st.cursor + 1)
+    }
+
+    // ── Long press ──
+    // Hold the current word until the progress fills — a deliberate, quiet
+    // proof-of-attention. The VM drives the timing so the bar is visible in
+    // both the chip and the footer.
+
+    fun onLongPressStart() {
+        if (_state.value.mode != ReadingMode.LONGPRESS || _state.value.passed) return
+        if (_state.value.cursor >= _state.value.wordsTotal) return
+        holdJob?.cancel()
+        holdJob = viewModelScope.launch {
+            var completed = false
+            try {
+                val start = SystemClock.elapsedRealtime()
+                _state.update { it.copy(holding = true, holdProgress = 0f) }
+                while (true) {
+                    delay(LONGPRESS_TICK_MS)
+                    val p = ((SystemClock.elapsedRealtime() - start).toFloat() / LONGPRESS_HOLD_MS)
+                        .coerceIn(0f, 1f)
+                    if (p >= 1f) break
+                    _state.update { it.copy(holdProgress = p) }
+                }
+                completed = true
+                val next = _state.value.cursor + 1
+                emit(ReadingEffect.WordCorrect)
+                advanceTo(next)
+                if (!_state.value.passed) _state.update { it.copy(holding = false, holdProgress = 0f) }
+            } finally {
+                if (!completed) {
+                    _state.update { it.copy(holding = false, holdProgress = 0f) }
+                }
+                holdJob = null
+            }
+        }
+    }
+
+    /** Finger lifted (or slop-scroll detected) before the hold completed. */
+    fun onLongPressEnd() {
+        val job = holdJob ?: return
+        if (job.isActive) job.cancel()
     }
 
     // ── Drag & drop ──
@@ -416,31 +523,42 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
     // ── Read aloud ──
     private fun startListening() {
         val ctx: Context = getApplication()
-        // Never stack recognizers — destroy any previous instance first.
-        runCatching { recognizer?.destroy() }
-        recognizer = null
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
             emit(ReadingEffect.Error("Speech recognition unavailable on this device."))
             _state.update { it.copy(mode = ReadingMode.RETYPE, listening = false) }
             return
         }
+        // One recognizer for the whole session: onResults/onError restart
+        // listening after every utterance, but destroy+create each time made
+        // the mic re-initialize on every word. Reuse the live instance and
+        // only startListening() again; destroy happens in stopListening().
+        val r = recognizer ?: runCatching { SpeechRecognizer.createSpeechRecognizer(ctx) }.getOrNull()
+        if (r == null) {
+            _state.update { it.copy(listening = false) }
+            emit(ReadingEffect.Error("Could not start microphone."))
+            return
+        }
+        recognizer = r
         runCatching {
-            val r = SpeechRecognizer.createSpeechRecognizer(ctx)
-            recognizer = r
             r.setRecognitionListener(loudListener)
-            val intent = android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            }
             _state.update { it.copy(listening = true) }
-            r.startListening(intent)
+            r.startListening(listenIntent)
         }.onFailure {
+            // The instance is dead — drop it so the next call recreates.
+            runCatching { r.destroy() }
+            recognizer = null
             _state.update { it.copy(listening = false) }
             emit(ReadingEffect.Error("Could not start microphone."))
         }
     }
+
+    private val listenIntent: android.content.Intent =
+        android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
 
     private val loudListener = object : RecognitionListener {
         override fun onPartialResults(partialResults: android.os.Bundle?) {
@@ -501,5 +619,9 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
                 ReadingViewModel(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application)
             }
         }
+
+        /** Hold-to-confirm duration + progress tick granularity. */
+        private const val LONGPRESS_HOLD_MS = 600L
+        private const val LONGPRESS_TICK_MS = 40L
     }
 }

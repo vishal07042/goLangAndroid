@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -180,6 +183,68 @@ private fun ReadingBlankSlot(
             fontWeight = FontWeight.Bold,
             color = GoColors.AccentGold
         )
+    }
+}
+
+// ─── Active word mid-typing (retype) ────────────────────────────────────
+/**
+ * The current word while being typed — a direct port of the Go
+ * ChallengeScreen's status-1 chip: typed part on the fill gradient
+ * (ChipCurrent → ChipDone lerp), blinking caret between, untyped part on
+ * ChipCurrent (whole untyped part flips to Error/ErrorBg while wrong).
+ */
+@Composable
+fun ReadingActiveWordChip(
+    word: String,
+    typed: Int,
+    wrong: Boolean,
+    fillAmount: Float,
+    caretAlpha: Float,
+    modifier: Modifier = Modifier
+) {
+    val safeTyped = typed.coerceIn(0, word.length)
+    val untyped = word.length - safeTyped
+    val fillBg = lerp(GoColors.ChipCurrent, GoColors.ChipDone, fillAmount)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.shadow(if (fillAmount < 1f) 4.dp else 0.dp, RoundedCornerShape(8.dp))
+    ) {
+        if (safeTyped > 0) {
+            Text(
+                text = word.substring(0, safeTyped),
+                fontFamily = CodeFont,
+                fontSize = READING_BIG,
+                lineHeight = READING_LINE,
+                fontWeight = FontWeight.Bold,
+                color = GoColors.ChipDoneText,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(fillBg)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        Text(
+            text = "\u2502",
+            fontFamily = CodeFont,
+            fontSize = READING_BIG,
+            lineHeight = READING_LINE,
+            fontWeight = FontWeight.Bold,
+            color = GoColors.TextPrimary.copy(alpha = caretAlpha)
+        )
+        if (untyped > 0) {
+            Text(
+                text = word.substring(safeTyped),
+                fontFamily = CodeFont,
+                fontSize = READING_BIG,
+                lineHeight = READING_LINE,
+                fontWeight = FontWeight.Bold,
+                color = if (wrong) GoColors.Error else GoColors.ChipCurrentText,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (wrong) GoColors.ErrorBg else GoColors.ChipCurrent)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
     }
 }
 

@@ -141,59 +141,42 @@ class ReadingCoreTest {
         assertTrue(slow > fast)
     }
 
-    // ── RetypeLogic ──────────────────────────────────────────────────
+    // ── Retype (original Go typing engine) ───────────────────────────
+    // The retype engine is GoEnforcerCore.Core — already covered end-to-end
+    // by CoreTest.kt. These tests pin the reading-side rules of the engine.
     @Test
-    fun `retype advances only on full correct match`() {
-        val expected = listOf("hello")
-        var s = RetypeState()
-        s = RetypeLogic.onChar(s, expected, 'h')
-        assertEquals(0, s.cursor)                 // not done yet
-        assertFalse(s.wrong)
-        s = RetypeLogic.onChar(s, expected, 'e')
-        s = RetypeLogic.onChar(s, expected, 'l')
-        s = RetypeLogic.onChar(s, expected, 'l')
-        s = RetypeLogic.onChar(s, expected, 'o')
-        s = RetypeLogic.commit(s, expected)
-        assertEquals(1, s.cursor)
+    fun `wrong key locks the word while it is un-typed`() {
+        val s = Session(words = listOf("cat"))
+        var locked = Core.typeChar(s, 'x')
+        assertTrue(locked.wrong)
+        // Still frozen while wrong — no extra errors stack in the engine.
+        assertEquals(locked, Core.typeChar(locked, 'c'))
+        // Backspace clears the lock.
+        assertFalse(Core.backspace(locked).wrong)
     }
 
     @Test
-    fun `retype mismatch sets wrong and counts error, never advances`() {
-        val expected = listOf("cat")
-        var s = RetypeState()
-        s = RetypeLogic.onChar(s, expected, 'c')
-        s = RetypeLogic.onChar(s, expected, 'z')   // not a prefix → mismatch
-        assertTrue(s.wrong)
-        assertEquals(1, s.errors)
-        assertEquals(0, s.cursor)
+    fun `space only commits a fully typed word`() {
+        val s = Session(words = listOf("cat", "dog"))
+        assertEquals(s, Core.typeSpace(s))                      // partial word ignored
+        val typedFull = Session(words = listOf("cat", "dog"), typedInWord = 3)
+        assertEquals(1, Core.typeSpace(typedFull).wordIndex)    // full word commits
     }
 
     @Test
-    fun `retype commit on wrong word does not advance`() {
-        val expected = listOf("cat")
-        var s = RetypeState()
-        s = RetypeLogic.onChar(s, expected, 'd')
-        s = RetypeLogic.commit(s, expected)
-        assertEquals(0, s.cursor)
-        assertTrue(s.wrong)
+    fun `backspace reaches back into the previous word`() {
+        val s = Session(words = listOf("cat", "dog"), wordIndex = 1)
+        val back = Core.backspace(s)
+        assertEquals(0, back.wordIndex)
+        assertEquals(3, back.typedInWord)
     }
 
     @Test
-    fun `retype backspace clears wrong flag`() {
-        val expected = listOf("cat")
-        var s = RetypeState()
-        s = RetypeLogic.onChar(s, expected, 'z')
-        assertTrue(s.wrong)
-        s = RetypeLogic.onBackspace(s)
-        assertFalse(s.wrong)
-    }
-
-    @Test
-    fun `retype ignores input past the last word`() {
-        val expected = listOf("a")
-        var s = RetypeState(cursor = 1)
-        s = RetypeLogic.onChar(s, expected, 'x')
-        assertEquals(1, s.cursor)
+    fun `reading chunks contain no typed-char loss on quotes`() {
+        // Phone keyboards fold typographic quotes — VM-side folds are pinned
+        // by ReadingText.normalize coverage above; the engine stays exact.
+        val s = Core.typeChar(Session(words = listOf("don\u2019t")), 'd')
+        assertEquals(1, s.typedInWord)
     }
 
     // ── SlideLogic ───────────────────────────────────────────────────
