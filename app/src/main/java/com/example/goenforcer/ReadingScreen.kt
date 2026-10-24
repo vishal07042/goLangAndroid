@@ -22,11 +22,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -416,33 +417,32 @@ private fun ReadingReaderScreen(
 }
 
 // ─── Paragraph body (retype / slide / drag / aloud) ────────────────────
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ParagraphBody(vm: ReadingViewModel, state: ReadingUiState) {
     val chunk = state.chunk ?: return
-    val words = chunk.words
 
-    // Flow of word chips with per-word states.
-    val rows = remember(words) { words.chunked(6) }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+    // Flow of word chips with per-word states. Chips size to their content and
+    // wrap naturally — never a fixed columns-per-row (that clipped long words).
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp)
     ) {
-        itemsIndexed(rows) { rowIndex, rowWords ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                rowWords.forEachIndexed { i, word ->
-                    val idx = rowIndex * 6 + i
-                    WordChip(
-                        word = word,
-                        state = state.wordStates.getOrElse(idx) { WordState.UPCOMING },
-                        isBlank = state.mode == ReadingMode.DRAG && idx == state.cursor,
-                        onSlide = if (state.mode == ReadingMode.SLIDE && idx == state.cursor)
-                            ({ vm.onSlideGesture(SystemClock.elapsedRealtime()) }) else null,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                // Pad short final row.
-                repeat(6 - rowWords.size) { Spacer(Modifier.weight(1f)) }
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            chunk.words.forEachIndexed { idx, word ->
+                WordChip(
+                    word = word,
+                    state = state.wordStates.getOrElse(idx) { WordState.UPCOMING },
+                    isBlank = state.mode == ReadingMode.DRAG && idx == state.cursor,
+                    onSlide = if (state.mode == ReadingMode.SLIDE && idx == state.cursor)
+                        ({ vm.onSlideGesture(SystemClock.elapsedRealtime()) }) else null
+                )
             }
         }
     }
@@ -527,8 +527,7 @@ private fun WordChip(
                 fontWeight = if (state == WordState.CURRENT) FontWeight.Bold else FontWeight.Normal,
                 textDecoration = decoration,
                 color = fg,
-                textAlign = TextAlign.Center,
-                maxLines = 1
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -695,10 +694,10 @@ private fun FlashFooter(vm: ReadingViewModel, state: ReadingUiState) {
 // plus two distractors. Tiles are dragged with a floating ghost; a drop is
 // accepted only when it lands over the highlighted slot. Tapping a tile also
 // drops it (accessibility fallback).
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DragBody(vm: ReadingViewModel, state: ReadingUiState) {
     val chunk = state.chunk ?: return
-    val rows = remember(chunk) { chunk.words.chunked(6) }
 
     // Slot bounds captured in root coordinates.
     var slotBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -712,39 +711,38 @@ private fun DragBody(vm: ReadingViewModel, state: ReadingUiState) {
     LaunchedEffect(state.cursor) { dragTile = null; dragOffset = Offset.Zero }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.weight(1f).padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
         ) {
-            itemsIndexed(rows) { rowIndex, rowWords ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowWords.forEachIndexed { i, word ->
-                        val idx = rowIndex * 6 + i
-                        val isSlot = idx == state.cursor
-                        WordChip(
-                            word = word,
-                            state = state.wordStates.getOrElse(idx) { WordState.UPCOMING },
-                            isBlank = isSlot,
-                            onSlide = null,
-                            modifier = Modifier
-                                .weight(1f)
-                                .then(
-                                    if (isSlot) Modifier.onGloballyPositioned {
-                                        slotBounds = it.boundsInRoot()
-                                    } else Modifier
-                                )
-                        )
-                    }
-                    repeat(6 - rowWords.size) { Spacer(Modifier.weight(1f)) }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                chunk.words.forEachIndexed { idx, word ->
+                    val isSlot = idx == state.cursor
+                    WordChip(
+                        word = word,
+                        state = state.wordStates.getOrElse(idx) { WordState.UPCOMING },
+                        isBlank = isSlot,
+                        onSlide = null,
+                        modifier = if (isSlot) {
+                            Modifier.onGloballyPositioned { slotBounds = it.boundsInRoot() }
+                        } else Modifier
+                    )
                 }
             }
         }
 
         Spacer(Modifier.height(14.dp))
 
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             state.tray.forEach { tile ->
                 Box(
