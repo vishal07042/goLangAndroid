@@ -189,6 +189,37 @@ class ReadingCoreTest {
         assertEquals(1, s.typedInWord)
     }
 
+    // ── MarkdownText.stripFrontMatter ────────────────────────────────
+    @Test
+    fun `front matter strips title and blurb up to a rule`() {
+        val raw = "# The X Cheat Sheet: A to B\n\nA reference doc — filler blurb.\n\n---\n\n## 1. Real content\n\nReal words."
+        val clean = MarkdownText.stripFrontMatter(raw)
+        assertTrue(clean.startsWith("## 1. Real content"))
+        assertFalse(clean.contains("filler blurb"))
+        assertFalse(clean.contains("# The X"))
+    }
+
+    @Test
+    fun `front matter strips title and blurb before a code fence`() {
+        val raw = "# The Flowchart Doc\n\nSame idea as before — intro only.\n```mermaid\nflowchart TD\n    A --> B\n```\n"
+        val clean = MarkdownText.stripFrontMatter(raw)
+        assertTrue(clean.startsWith("```mermaid"))
+        assertFalse(clean.contains("intro only"))
+    }
+
+    @Test
+    fun `front matter falls back to title-only when no early content marker`() {
+        val raw = "# Title\n\nFirst paragraph of actual prose content.\n\nMore prose continues here."
+        val clean = MarkdownText.stripFrontMatter(raw)
+        assertEquals("First paragraph of actual prose content.\n\nMore prose continues here.", clean)
+    }
+
+    @Test
+    fun `front matter passes through docs without a leading title`() {
+        val raw = "Just prose, no title.\n\n## Section\n"
+        assertEquals(raw, MarkdownText.stripFrontMatter(raw))
+    }
+
     // ── SlideLogic ───────────────────────────────────────────────────
     @Test
     fun `pace floor rejects too-fast swipes`() {

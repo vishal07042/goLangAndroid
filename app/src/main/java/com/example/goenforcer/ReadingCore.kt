@@ -383,8 +383,38 @@ object MarkdownText {
     private val TABLE_SEP = Regex("^\\s*\\|?\\s*:?-{3,}:?\\s*(\\|\\s*:?-{3,}:?\\s*)+\\|?\\s*$", RegexOption.MULTILINE)
     private val MULTI_BLANK = Regex("\n{3,}")
 
-    fun toPlainText(raw: String): String {
-        var t = raw.replace("\r\n", "\n").replace('\r', '\n')
+    // A real content block: heading, horizontal rule, or code fence.
+    private val CONTENT_LINE = Regex("""^\s{0,3}(#{1,6}\s|(-{3,}|\*{3,}|_{3,})\s*$|```|\||>)""")
+
+    /**
+     * Strip a source doc's front matter: the H1 title line plus the promo
+     * blurb paragraph between it and the first real content block. The app
+     * already shows the title (from the filename), and the blurb ("a reference
+     * doc — ...") is filler that would otherwise become the first enforced
+     * chunks. Conservative: applies ONLY when the doc starts with "# " and
+     * finds real content within a few lines; otherwise the text passes through
+     * untouched.
+     */
+    fun stripFrontMatter(raw: String): String {
+        val lines = raw.replace("\r\n", "\n").split('\n')
+        if (lines.isEmpty() || !lines[0].startsWith("# ")) return raw
+        val rest = lines.drop(1)
+        val contentAt = rest.take(12).indexOfFirst { CONTENT_LINE.containsMatchIn(it) }
+        if (contentAt < 0) {
+            // No early content marker — drop only the title line.
+            return rest.subList(1, rest.size).joinToString("\n").trimStart('\n')
+        }
+        // Fences/blockquotes/tables begin content ON their line; headings and
+        // rules only separate the blurb from what follows.
+        val marker = rest[contentAt].trimStart()
+        val keepMarker = marker.startsWith("```") || marker.startsWith(">") || marker.startsWith("|")
+        val cut = if (keepMarker) contentAt else contentAt + 1
+        return rest.subList(cut, rest.size)
+            .joinToString("\n")
+            .trimStart('\n')
+    }
+
+    fun toPlainText(raw: String): String {        var t = raw.replace("\r\n", "\n").replace('\r', '\n')
         t = FENCE.replace(t, "")
         t = TABLE_SEP.replace(t, "")
         t = IMAGE.replace(t, "$1")

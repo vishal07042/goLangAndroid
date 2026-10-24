@@ -30,7 +30,11 @@ object ReadingAssets {
             ReadingDocument(
                 id = PREFIX + name,
                 title = prettyTitle(name),
-                text = MarkdownText.toPlainText(raw),
+                text = MarkdownText.toPlainText(
+                    // Drop the redundant H1 title + promo blurb the docs lead
+                    // with — the reading flow should start at the content.
+                    MarkdownText.stripFrontMatter(raw)
+                ),
                 addedAt = 0L,
                 builtIn = true
             )
