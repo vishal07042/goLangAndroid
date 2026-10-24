@@ -94,6 +94,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
@@ -675,11 +676,13 @@ private fun ParagraphBody(vm: ReadingViewModel, state: ReadingUiState) {
     }
 }
 
-// ─── Flash body (SwiftRead-style RSVP) ─────────────────────────────────
+// ─── Flash body (SwiftRead-style RSVP + context rows) ──────────────────
 @Composable
 private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
     val chunk = state.chunk ?: return
-    val currentWord = chunk.words.getOrNull(state.flashIndex) ?: chunk.words.lastOrNull() ?: ""
+    val words = chunk.words
+    val i = state.flashIndex.coerceIn(0, words.size)
+    val currentWord = words.getOrNull(i) ?: words.lastOrNull() ?: ""
 
     // ORP letter highlighted inside ONE text run — a single baseline, no skew,
     // real kerning between the letters (splitting into separate Texts broke both).
@@ -698,11 +701,35 @@ private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
         }
     }
 
+    // Near-by context: up to three words already read above, three upcoming
+    // below. Single line each, fixed height so the layout never jumps.
+    val before = remember(i) {
+        words.subList((i - 3).coerceAtLeast(0), i.coerceAtMost(words.size)).joinToString(" ")
+    }
+    val after = remember(i) {
+        val from = (i + 1).coerceAtMost(words.size)
+        val to = (i + 4).coerceAtMost(words.size)
+        if (from < to) words.subList(from, to).joinToString(" ") else ""
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Words just read — faintest.
+        Text(
+            text = before,
+            fontFamily = CodeFont,
+            fontSize = 18.sp,
+            lineHeight = 24.sp,
+            color = GoColors.TextFaint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().height(24.dp)
+        )
+        Spacer(Modifier.height(20.dp))
         Text(
             text = word,
             fontSize = 48.sp,
@@ -712,10 +739,23 @@ private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
             maxLines = 1,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
+        // Words coming next — slightly stronger than the read ones, still muted.
+        Text(
+            text = after,
+            fontFamily = CodeFont,
+            fontSize = 18.sp,
+            lineHeight = 24.sp,
+            color = GoColors.TextMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().height(24.dp)
+        )
+        Spacer(Modifier.height(20.dp))
         // WPM read-out + progress within the chunk.
         Text(
-            "${state.flashIndex + 1} / ${chunk.words.size} · ${state.wpm} wpm",
+            "${i + 1} / ${words.size} · ${state.wpm} wpm",
             style = MaterialTheme.typography.labelMedium,
             color = GoColors.TextFaint
         )
