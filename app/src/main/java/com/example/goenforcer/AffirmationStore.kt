@@ -22,6 +22,12 @@ object AffirmationStore {
 
     /** Daily rotating affirmation bank. */
     val BANK: List<String> = listOf(
+        "Money is also a problem solving tool",
+        "wealth dont just gets you money but trust , creadability and respect as well",
+
+        "some problems can only be solved by money",
+        "But still try for who knows what is possible",
+        "put in  the reps,anyways you dont have a choice, everybody do something, you can too",
         "Your doubt doesn’t stop the growth. Skipping the work does.",
         "Muscle follows the work you do, not the story you tell.",
         "Believe it or not, put in the work and muscle grows.",
@@ -43,7 +49,9 @@ object AffirmationStore {
         "reps builds confidence",
         "work not only builds skill but builds confidence too",
         "use sunk cost fallacy to your advantage",
-        "5k volume a day keeps depression away"
+        "5k volume a day keeps depression away",
+        "humans are born to do something",
+        "evoultion and biology both supports work and motion"
     )
 
     private fun sp(ctx: Context) =

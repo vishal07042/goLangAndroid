@@ -263,6 +263,25 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
         startChunk(_state.value.chunkIndex)
     }
 
+    /** Go back to the previous chunk (review/redo — progress can only advance). */
+    fun previousChunk() {
+        val prev = _state.value.chunkIndex - 1
+        if (prev < 0) return
+        missedSoFar.clear()
+        startChunk(prev)
+    }
+
+    /** Flash navigation: step one word back/forward (pauses playback). */
+    fun stepWord(delta: Int) {
+        if (_state.value.mode != ReadingMode.FLASH) return
+        stopFlash()
+        val chunk = _state.value.chunk ?: return
+        if (chunk.words.isEmpty()) return
+        val idx = (_state.value.flashIndex + delta).coerceIn(0, chunk.words.size - 1)
+        setWordStates(idx, missedSoFar)
+        _state.update { it.copy(flashIndex = idx) }
+    }
+
     /** Restart the mic listener (e.g. after RECORD_AUDIO is granted). */
     fun restartAloud() {
         if (_state.value.mode != ReadingMode.ALOUD) return

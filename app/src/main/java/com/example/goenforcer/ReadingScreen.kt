@@ -17,6 +17,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -31,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -74,7 +76,10 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -117,7 +122,13 @@ fun ReadingScreen(onBack: () -> Unit) {
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(GoColors.Background)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(GoColors.Background)
+            // Safe area: status bar / nav bar / cutout / keyboard.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+    ) {
         if (sessionId == null) {
             ReadingLibraryScreen(
                 vm = vm,
@@ -356,12 +367,29 @@ private fun ReadingReaderScreen(
                 trackColor = GoColors.Surface
             )
             Spacer(Modifier.height(6.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "${state.wordsToGo} words to go",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = GoColors.TextFaint
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Mode never hides behind an icon — an explicit pill opens the picker.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(GoColors.Surface)
+                        .clickable { showModes = true }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(modeIcon(state.mode), contentDescription = null, tint = GoColors.Primary, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        state.mode.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = GoColors.TextPrimary
+                    )
+                    Icon(Icons.Filled.ArrowDropDown, contentDescription = "Change mode", tint = GoColors.TextFaint)
+                }
                 Spacer(Modifier.weight(1f))
                 if (state.errors > 0) {
                     Text(
@@ -369,7 +397,13 @@ private fun ReadingReaderScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = GoColors.Error
                     )
+                    Spacer(Modifier.width(10.dp))
                 }
+                Text(
+                    "${state.wordsToGo} words to go",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GoColors.TextFaint
+                )
             }
         }
 
@@ -417,119 +451,26 @@ private fun ReadingReaderScreen(
 }
 
 // ─── Paragraph body (retype / slide / drag / aloud) ────────────────────
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ParagraphBody(vm: ReadingViewModel, state: ReadingUiState) {
     val chunk = state.chunk ?: return
 
-    // Flow of word chips with per-word states. Chips size to their content and
-    // wrap naturally — never a fixed columns-per-row (that clipped long words).
+    // Original Go Enforcer canvas: monospace code chips with per-word states,
+    // flowing and wrapping naturally.
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
     ) {
-        FlowRow(
+        ReadingWordFlow(
+            words = chunk.words,
+            states = state.wordStates,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            chunk.words.forEachIndexed { idx, word ->
-                WordChip(
-                    word = word,
-                    state = state.wordStates.getOrElse(idx) { WordState.UPCOMING },
-                    isBlank = state.mode == ReadingMode.DRAG && idx == state.cursor,
-                    onSlide = if (state.mode == ReadingMode.SLIDE && idx == state.cursor)
-                        ({ vm.onSlideGesture(SystemClock.elapsedRealtime()) }) else null
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WordChip(
-    word: String,
-    state: WordState,
-    isBlank: Boolean,
-    onSlide: (() -> Unit)?,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-
-    // Shake animation for the current word on error.
-    val shake = rememberInfiniteTransition(label = "shake")
-    val shakeX by shake.animateFloat(
-        initialValue = 0f,
-        targetValue = if (state == WordState.MISSED) 6f else 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(60, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shakeX"
-    )
-
-    val bg = when (state) {
-        WordState.DONE -> GoColors.Surface
-        WordState.CURRENT -> GoColors.ChipCurrent
-        WordState.MISSED -> GoColors.ErrorBg
-        WordState.UPCOMING -> Color.Transparent
-    }
-    val fg = when (state) {
-        WordState.DONE -> GoColors.TextFaint
-        WordState.CURRENT -> GoColors.ChipCurrentText
-        WordState.MISSED -> GoColors.Error
-        WordState.UPCOMING -> GoColors.TextPrimary
-    }
-    val decoration = if (state == WordState.DONE) TextDecoration.LineThrough else TextDecoration.None
-
-    val borderMod = when (state) {
-        WordState.CURRENT -> Modifier.border(2.dp, GoColors.Primary, RoundedCornerShape(10.dp))
-        WordState.MISSED -> Modifier.border(2.dp, GoColors.Error, RoundedCornerShape(10.dp))
-        WordState.UPCOMING -> Modifier.border(1.dp, GoColors.Border, RoundedCornerShape(10.dp))
-        else -> Modifier
-    }
-
-    Box(
-        modifier = modifier
-            .offset { IntOffset(shakeX.roundToInt(), 0) }
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .then(borderMod)
-            .then(
-                if (onSlide != null) Modifier.pointerInput(word) {
-                    detectTapGestures(onTap = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSlide()
-                    })
-                } else Modifier
-            )
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isBlank) {
-            // Drag & drop slot: dashed placeholder showing where the word goes.
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(GoColors.AccentGold.copy(alpha = 0.25f))
-                    .border(2.dp, GoColors.AccentGold, RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("?", color = GoColors.AccentGold, fontWeight = FontWeight.Bold)
-            }
-        } else {
-            Text(
-                text = word,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (state == WordState.CURRENT) FontWeight.Bold else FontWeight.Normal,
-                textDecoration = decoration,
-                color = fg,
-                textAlign = TextAlign.Center
-            )
-        }
+            onWordTap = if (state.mode == ReadingMode.SLIDE) {
+                ({ idx -> if (idx == state.cursor) vm.onSlideGesture(SystemClock.elapsedRealtime()) })
+            } else null
+        )
     }
 }
 
@@ -539,31 +480,37 @@ private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
     val chunk = state.chunk ?: return
     val currentWord = chunk.words.getOrNull(state.flashIndex) ?: chunk.words.lastOrNull() ?: ""
 
-    // ORP highlight: the eye's landing spot, ~1/3 into the word.
-    val orp = Rsvp.orpIndex(currentWord)
-    val before = currentWord.take(orp)
-    val focus = currentWord.getOrElse(orp) { ' ' }.toString()
-    val after = currentWord.substring((orp + 1).coerceAtMost(currentWord.length))
+    // ORP letter highlighted inside ONE text run — a single baseline, no skew,
+    // real kerning between the letters (splitting into separate Texts broke both).
+    val word = remember(currentWord) {
+        val orp = Rsvp.orpIndex(currentWord)
+        buildAnnotatedString {
+            if (orp > 0) {
+                withStyle(SpanStyle(color = GoColors.TextPrimary)) { append(currentWord.take(orp)) }
+            }
+            withStyle(SpanStyle(color = GoColors.Primary, fontWeight = FontWeight.ExtraBold)) {
+                append(currentWord.getOrElse(orp) { ' ' })
+            }
+            if (orp + 1 < currentWord.length) {
+                withStyle(SpanStyle(color = GoColors.TextPrimary)) { append(currentWord.substring(orp + 1)) }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Fixed focal point: the ORP letter stays at screen centre while the
-        // word grows left/right around it (RSVP), so the eye never travels.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        Text(
+            text = word,
+            fontSize = 48.sp,
+            fontFamily = CodeFont,
+            textAlign = TextAlign.Center,
+            lineHeight = 56.sp,
+            maxLines = 1,
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                FlashLetter(text = before, color = GoColors.TextPrimary, size = 44.sp)
-            }
-            FlashLetter(text = focus, color = GoColors.Primary, size = 52.sp, emphasize = true)
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                FlashLetter(text = after, color = GoColors.TextPrimary, size = 44.sp)
-            }
-        }
+        )
         Spacer(Modifier.height(24.dp))
         // WPM read-out + progress within the chunk.
         Text(
@@ -572,23 +519,6 @@ private fun FlashBody(vm: ReadingViewModel, state: ReadingUiState) {
             color = GoColors.TextFaint
         )
     }
-}
-
-@Composable
-private fun FlashLetter(text: String, color: Color, size: androidx.compose.ui.unit.TextUnit, emphasize: Boolean = false) {
-    val scale by animateFloatAsState(
-        targetValue = if (emphasize) 1.15f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
-        label = "flashScale"
-    )
-    Text(
-        text = text,
-        fontSize = size,
-        fontWeight = if (emphasize) FontWeight.ExtraBold else FontWeight.Bold,
-        color = color,
-        fontFamily = FontFamily.Monospace,
-        modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale }
-    )
 }
 
 // ─── Footers ───────────────────────────────────────────────────────────
@@ -678,6 +608,20 @@ private fun FlashFooter(vm: ReadingViewModel, state: ReadingUiState) {
             Text("${state.wpm}", style = MaterialTheme.typography.labelMedium, color = GoColors.TextPrimary)
         }
         Spacer(Modifier.height(6.dp))
+        // Manual navigation: step back/forward through the chunk's words.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTactileButton(
+                text = "‹ Word",
+                onClick = { vm.stepWord(-1) },
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTactileButton(
+                text = "Word ›",
+                onClick = { vm.stepWord(1) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
         TactileButton(
             text = if (state.flashPlaying) "Pause" else "Play",
             onClick = { vm.toggleFlash() },
@@ -704,6 +648,8 @@ private fun DragBody(vm: ReadingViewModel, state: ReadingUiState) {
     val tileOrigins = remember { mutableStateMapOf<String, Offset>() }
     var dragTile by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    /** Pointer position in root coords, tracked live during a drag. */
+    var dragPointerRoot by remember { mutableStateOf<Offset?>(null) }
     var tileSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val haptic = LocalHapticFeedback.current
 
@@ -724,11 +670,11 @@ private fun DragBody(vm: ReadingViewModel, state: ReadingUiState) {
             ) {
                 chunk.words.forEachIndexed { idx, word ->
                     val isSlot = idx == state.cursor
-                    WordChip(
+                    ReadingWordChip(
                         word = word,
                         state = state.wordStates.getOrElse(idx) { WordState.UPCOMING },
                         isBlank = isSlot,
-                        onSlide = null,
+                        blankActive = dragTile != null,
                         modifier = if (isSlot) {
                             Modifier.onGloballyPositioned { slotBounds = it.boundsInRoot() }
                         } else Modifier
@@ -765,38 +711,50 @@ private fun DragBody(vm: ReadingViewModel, state: ReadingUiState) {
                             if (dragTile == tile) GoColors.Primary else GoColors.Border,
                             RoundedCornerShape(12.dp)
                         )
+                        // Tap fallback: one quick tap drops the tile.
+                        .clickable { vm.onTileDropped(tile) }
                         .pointerInput(tile) {
                             detectDragGestures(
-                                onDragStart = {
+                                onDragStart = { startOffset ->
                                     dragTile = tile
                                     dragOffset = Offset.Zero
+                                    dragPointerRoot =
+                                        (tileOrigins[tile] ?: Offset.Zero) + startOffset
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 },
                                 onDragEnd = {
-                                    val origin = tileOrigins[tile]
+                                    // Drop accepts the POINTER landing anywhere over
+                                    // the slot (generous), or the tile rect overlapping it.
                                     val slot = slotBounds
-                                    if (origin != null && slot != null) {
-                                        val dropped = androidx.compose.ui.geometry.Rect(
+                                    if (slot != null) {
+                                        val pointer = dragPointerRoot
+                                        val origin = tileOrigins[tile]
+                                        val pointerHit = pointer != null && slot.contains(pointer)
+                                        val rectHit = origin != null && androidx.compose.ui.geometry.Rect(
                                             offset = origin + dragOffset,
                                             size = androidx.compose.ui.geometry.Size(
                                                 tileSize.width.toFloat(),
                                                 tileSize.height.toFloat()
                                             )
-                                        )
-                                        if (dropped.overlaps(slot)) vm.onTileDropped(tile)
+                                        ).overlaps(slot)
+                                        if (pointerHit || rectHit) vm.onTileDropped(tile)
                                     }
                                     dragTile = null
+                                    dragPointerRoot = null
                                     dragOffset = Offset.Zero
                                 },
-                                onDragCancel = { dragTile = null; dragOffset = Offset.Zero },
+                                onDragCancel = {
+                                    dragTile = null
+                                    dragPointerRoot = null
+                                    dragOffset = Offset.Zero
+                                },
                                 onDrag = { change, delta ->
                                     change.consume()
                                     dragOffset += delta
+                                    dragPointerRoot =
+                                        (tileOrigins[tile] ?: Offset.Zero) + change.position
                                 }
                             )
-                        }
-                        .pointerInput(tile) {
-                            detectTapGestures(onTap = { vm.onTileDropped(tile) })
                         }
                         .padding(horizontal = 20.dp, vertical = 14.dp),
                     contentAlignment = Alignment.Center
@@ -820,12 +778,14 @@ private fun ModeActionBar(vm: ReadingViewModel, state: ReadingUiState) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Bad chunk skip (per-document; rate limiting is a later condition).
-        OutlinedTactileButton(
-            text = "Skip chunk",
-            onClick = { vm.advanceChunk() },
-            modifier = Modifier.weight(1f)
-        )
+        // Review a previous chunk (progress never regresses).
+        if (state.chunkIndex > 0) {
+            OutlinedTactileButton(
+                text = "‹ Prev",
+                onClick = { vm.previousChunk() },
+                modifier = Modifier.weight(1f)
+            )
+        }
         when {
             state.passed -> TactileButton(
                 text = "Next chunk",
@@ -841,7 +801,11 @@ private fun ModeActionBar(vm: ReadingViewModel, state: ReadingUiState) {
                     bottomColor = Color(0xFFCC7700),
                     edgeColor = Color(0xFFCC7700)
                 )
-            else -> {}
+            else -> OutlinedTactileButton(
+                text = "Skip chunk",
+                onClick = { vm.advanceChunk() },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -914,6 +878,14 @@ private fun ReadingHeader(
 }
 
 // ─── Mode picker ───────────────────────────────────────────────────────
+fun modeIcon(mode: ReadingMode) = when (mode) {
+    ReadingMode.RETYPE -> Icons.Filled.Keyboard
+    ReadingMode.ALOUD -> Icons.Filled.Mic
+    ReadingMode.SLIDE -> Icons.Filled.Swipe
+    ReadingMode.DRAG -> Icons.Filled.TouchApp
+    ReadingMode.FLASH -> Icons.Filled.FlashOn
+}
+
 @Composable
 private fun ModePickerDialog(
     current: ReadingMode,
@@ -946,6 +918,12 @@ private fun ModePickerDialog(
                         )
                         Spacer(Modifier.height(6.dp))
                     }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "You can switch any time — progress follows the chunk, not the mode",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GoColors.TextFaint
+                )
             }
         }
     }
@@ -953,13 +931,7 @@ private fun ModePickerDialog(
 
 @Composable
 private fun ModeRow(mode: ReadingMode, selected: Boolean, onClick: () -> Unit) {
-    val icon = when (mode) {
-        ReadingMode.RETYPE -> Icons.Filled.Keyboard
-        ReadingMode.ALOUD -> Icons.Filled.Mic
-        ReadingMode.SLIDE -> Icons.Filled.Swipe
-        ReadingMode.DRAG -> Icons.Filled.TouchApp
-        ReadingMode.FLASH -> Icons.Filled.FlashOn
-    }
+    val icon = modeIcon(mode)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
