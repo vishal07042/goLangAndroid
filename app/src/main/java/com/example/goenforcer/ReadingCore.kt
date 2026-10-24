@@ -127,10 +127,14 @@ object ReadingSentences {
     }
 }
 
-// ─── Deterministic 30-word chunker ─────────────────────────────────────
+// ─── Deterministic word chunker ────────────────────────────────────────
 object ReadingChunker {
 
+    /** Enforcement-mode chunk size (retype / slide / long press / drag / aloud). */
     const val CHUNK_WORDS = 30
+
+    /** Flash reads bigger slices — 60 words per speed-reading pass. */
+    const val FLASH_CHUNK_WORDS = 60
 
     fun words(text: String): List<String> =
         text.split(Regex("\\s+")).filter { it.isNotEmpty() }

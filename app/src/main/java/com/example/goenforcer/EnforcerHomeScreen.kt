@@ -61,7 +61,7 @@ fun EnforcerHomeScreen() {
             vm.refresh()
             val docs = ReadingStore.documents(context)
             docCount = docs.size
-            startedReads = docs.count { ReadingStore.lastPassedSeq(context, it.id) >= 0 }
+            startedReads = docs.count { ReadingStore.readWords(context, it.id) > 0 }
         }
     }
 

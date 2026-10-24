@@ -238,7 +238,7 @@ private fun ReadingLibraryScreen(
             items(docs.value, key = { it.id }) { doc ->
                 DocumentCard(
                     doc = doc,
-                    lastPassed = ReadingStore.lastPassedSeq(LocalContext.current, doc.id),
+                    wordsRead = ReadingStore.readWords(LocalContext.current, doc.id),
                     onOpen = { onOpen(doc.id) },
                     onDelete = {
                         vm.removeDocument(doc.id)
@@ -303,13 +303,13 @@ private fun BuiltInBadge() {
 @Composable
 private fun DocumentCard(
     doc: ReadingDocument,
-    lastPassed: Int,
+    wordsRead: Int,
     onOpen: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val chunks = remember(doc.text) { ReadingChunker.chunk(ReadingChunker.words(doc.text)).size }
-    val read = (lastPassed + 1).coerceAtMost(chunks)
-    val pct = if (chunks == 0) 0f else read.toFloat() / chunks
+    val totalWords = remember(doc.text) { ReadingStore.wordCount(doc.text) }
+    val read = wordsRead.coerceAtMost(totalWords)
+    val pct = if (totalWords == 0) 0f else read.toFloat() / totalWords
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -334,7 +334,7 @@ private fun DocumentCard(
                     }
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "$read / $chunks chunks",
+                        "$read / $totalWords words",
                         style = MaterialTheme.typography.labelSmall,
                         color = GoColors.TextFaint
                     )
@@ -355,7 +355,7 @@ private fun DocumentCard(
             )
             Spacer(Modifier.height(14.dp))
             TactileButton(
-                text = if (read >= chunks && chunks > 0) "Read again" else if (read > 0) "Resume" else "Start reading",
+                text = if (read >= totalWords && totalWords > 0) "Read again" else if (read > 0) "Resume" else "Start reading",
                 onClick = onOpen,
                 modifier = Modifier.fillMaxWidth()
             )

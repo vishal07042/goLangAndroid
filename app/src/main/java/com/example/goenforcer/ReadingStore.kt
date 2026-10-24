@@ -79,7 +79,7 @@ object ReadingStore {
         )
     }
 
-    /** Highest chunk seq passed for a doc (−1 = nothing yet). */
+    /** Highest chunk seq passed for a doc (−1 = nothing yet). Legacy 30-word store. */
     fun lastPassedSeq(ctx: Context, docId: String): Int =
         sp(ctx).getInt(KEY_PREFIX_PROGRESS + docId, -1)
 
@@ -89,6 +89,36 @@ object ReadingStore {
             sp(ctx).edit().putInt(KEY_PREFIX_PROGRESS + docId, seq).apply()
         }
     }
+
+    // ── Word-frontier progress (mode-independent) ──
+    // Flash chunks 60 words, other modes 30 — a chunk seq means different
+    // things per mode, so the frontier is stored as an absolute word count.
+    private const val KEY_PREFIX_WORDS = "reading_doc_words_"
+
+    /**
+     * Number of words fully passed by the furthest chunk. Migrates the old
+     * seq-per-chunk counter (30-word chunks) on first read.
+     */
+    fun readWords(ctx: Context, docId: String): Int {
+        val s = sp(ctx)
+        val stored = s.getInt(KEY_PREFIX_WORDS + docId, -1)
+        if (stored >= 0) return stored
+        val seq = s.getInt(KEY_PREFIX_PROGRESS + docId, -1)
+        if (seq < 0) return 0
+        val migrated = (seq + 1) * ReadingChunker.CHUNK_WORDS
+        s.edit().putInt(KEY_PREFIX_WORDS + docId, migrated).apply()
+        return migrated
+    }
+
+    /** Frontier only moves forward. */
+    fun setReadWords(ctx: Context, docId: String, n: Int) {
+        if (n > readWords(ctx, docId)) {
+            sp(ctx).edit().putInt(KEY_PREFIX_WORDS + docId, n).apply()
+        }
+    }
+
+    /** Total whitespace words of [text] (library progress denominators). */
+    fun wordCount(text: String): Int = text.split(Regex("\\s+")).count { it.isNotEmpty() }
 
     // ── Settings ──
     fun slideVariant(ctx: Context): SlideVariant =

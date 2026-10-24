@@ -111,7 +111,13 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
 
     private var chunks: List<ReadingChunk> = emptyList()
     private var docId: String? = null
+    private var docText: String? = null
     private var aligner: AloudAligner? = null
+
+    /** Chunk size depends on the mode: flash speed-reads 60-word slices. */
+    private fun chunkSize(mode: ReadingMode): Int =
+        if (mode == ReadingMode.FLASH) ReadingChunker.FLASH_CHUNK_WORDS
+        else ReadingChunker.CHUNK_WORDS
 
     // Flash playback
     private val flashHandler = Handler(Looper.getMainLooper())
@@ -137,16 +143,19 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
     /** Open a document at its frontier (or re-read from 0 if requested). */
     fun openDocument(id: String, fromStart: Boolean = false) {
         val doc = ReadingStore.document(getApplication(), id) ?: return
-        chunks = ReadingChunker.build(doc.text)
+        docText = doc.text
         docId = id
-        val resume = if (fromStart) -1 else ReadingStore.lastPassedSeq(getApplication(), id)
-        val next = (resume + 1).coerceIn(0, (chunks.size - 1).coerceAtLeast(0))
+        val size = chunkSize(_state.value.mode)
+        chunks = ReadingChunker.build(doc.text, size)
+        val totalWords = ReadingChunker.words(doc.text).size
+        val frontier = if (fromStart) 0 else ReadingStore.readWords(getApplication(), id)
+        val next = (frontier / size).coerceIn(0, (chunks.size - 1).coerceAtLeast(0))
         _state.update {
             it.copy(
                 documentId = id,
                 documentTitle = doc.title,
                 totalChunks = chunks.size,
-                documentFinished = chunks.isNotEmpty() && resume >= chunks.size - 1
+                documentFinished = chunks.isNotEmpty() && frontier >= totalWords
             )
         }
         if (chunks.isEmpty()) {
@@ -162,9 +171,21 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.mode == mode) return
         stopFlash(); stopListening()
         ReadingStore.setLastMode(getApplication(), mode.name)
+        // Rechunk for the new mode (flash = 60-word slices) and continue as
+        // close to the same word as possible.
+        val st = _state.value
+        val oldSize = chunkSize(st.mode)
+        val wordAt = st.chunkIndex * oldSize + st.cursor
         _state.update { it.copy(mode = mode) }
-        // Restart the current chunk under the new mode.
-        startChunk(_state.value.chunkIndex)
+        val text = docText
+        if (text != null) {
+            chunks = ReadingChunker.build(text, chunkSize(mode))
+            _state.update { it.copy(totalChunks = chunks.size) }
+            val resume = (wordAt / chunkSize(mode)).coerceIn(0, (chunks.size - 1).coerceAtLeast(0))
+            startChunk(resume)
+        } else {
+            startChunk(_state.value.chunkIndex)
+        }
     }
 
     fun setSlideVariant(v: ReadingStore.SlideVariant) {
@@ -251,11 +272,15 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
             else -> true                        // retype/slide/drag advance only on success
         }
         if (pass) {
-            docId?.let { ReadingStore.setLastPassedSeq(getApplication(), it, s.chunkIndex) }
+            // Save progress as an absolute word frontier so switching modes
+            // (30 ↔ 60-word chunks) keeps the reading position consistent.
+            val frontier = (s.chunkIndex + 1) * chunkSize(mode)
+            val totalWords = docText?.let { ReadingChunker.words(it).size } ?: (s.chunkIndex + 1) * chunkSize(mode)
+            docId?.let { ReadingStore.setReadWords(getApplication(), it, frontier) }
             // Consecutive-slide guard bookkeeping.
             if (mode == ReadingMode.SLIDE) ReadingStore.setSlideStreak(getApplication(), ReadingStore.slideStreak(getApplication()) + 1)
             else ReadingStore.setSlideStreak(getApplication(), 0)
-            val isLast = s.chunkIndex >= s.totalChunks - 1
+            val isLast = frontier >= totalWords
             _state.update { it.copy(passed = true, documentFinished = isLast) }
             emit(ReadingEffect.ChunkPassed)
         } else {
@@ -272,6 +297,8 @@ class ReadingViewModel(app: Application) : AndroidViewModel(app) {
         }
         missedSoFar.clear()
         startChunk(next)
+        // Flash: the next chunk starts speed-reading immediately.
+        if (_state.value.mode == ReadingMode.FLASH) startFlash()
     }
 
     fun retryChunk() {

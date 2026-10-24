@@ -75,6 +75,16 @@ class ReadingCoreTest {
     }
 
     @Test
+    fun `flash chunks read 60-word slices`() {
+        val words = List(130) { "w$it" }
+        val chunks = ReadingChunker.chunk(words, ReadingChunker.FLASH_CHUNK_WORDS)
+        assertEquals(3, chunks.size)
+        assertEquals(60, chunks[0].size)
+        assertEquals(60, chunks[1].size)
+        assertEquals(10, chunks[2].size)
+    }
+
+    @Test
     fun `chunk is deterministic across calls`() {
         val text = (1..100).joinToString(" ") { "word$it" }
         assertEquals(ReadingChunker.build(text), ReadingChunker.build(text))
